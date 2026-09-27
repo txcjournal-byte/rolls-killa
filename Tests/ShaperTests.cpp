@@ -211,6 +211,53 @@ public:
             juce::ignoreUnused (base);
         }
 
+        beginTest ("model: delete a note, delete a whole roll, delete a re-timed roll note");
+        {
+            const auto index = lib.search ("Codex Trappus").front();
+            ModelSettings s;
+            s.presetIndex = index;
+            s.bars = 2;
+            Pattern editable;
+            const auto base = RollModel::build (lib, s, &editable);
+            const auto rolls = findRolls (base);
+            expect (! rolls.empty());
+
+            // delete one plain note
+            auto del = s;
+            del.edits[beatToTick (0.5)].deleted = true;
+            const auto withoutNote = RollModel::build (lib, del);
+            expectEquals ((int) withoutNote.notes.size(), (int) base.notes.size() - 1);
+            expect (std::none_of (withoutNote.notes.begin(), withoutNote.notes.end(), [] (const Note& n) { return std::abs (n.beat - 0.5) < 1.0e-9; }));
+
+            // delete the first roll: fewer rolls, the groove keeps going (grid refilled)
+            auto noRoll = s;
+            noRoll.edits[beatToTick (rolls.front().start)].removeRoll = true;
+            const auto withoutRoll = RollModel::build (lib, noRoll);
+            expectEquals ((int) findRolls (withoutRoll).size(), (int) rolls.size() - 1);
+            expect (validatePatternInvariants (withoutRoll).isEmpty());
+            const auto hitsInRollSpan = std::count_if (withoutRoll.notes.begin(), withoutRoll.notes.end(), [&] (const Note& n)
+                                                       { return n.beat >= rolls.front().start - 1.0e-9 && n.beat < rolls.front().start + rolls.front().length; });
+            expectGreaterThan ((int) hitsInRollSpan, 0, "plain hits fill the removed roll");
+
+            // with Roll Speed = Faster the roll notes are regenerated; they can still be deleted by position
+            auto fast = s;
+            fast.shape.speedShift = 1;
+            const auto fastPattern = RollModel::build (lib, fast);
+            const auto fastRolls = findRolls (fastPattern);
+            const auto& generated = fastPattern.notes[(size_t) fastRolls.front().first + 1];
+            expectLessThan (generated.srcTick, 0, "note re-timed by the shaper");
+            fast.edits[RollModel::editKeyOf (generated)].deleted = true;
+            const auto fastDeleted = RollModel::build (lib, fast);
+            expectEquals ((int) fastDeleted.notes.size(), (int) fastPattern.notes.size() - 1);
+            expect (validatePatternInvariants (fastDeleted).isEmpty());
+
+            // a generated roll can be removed as a whole too
+            auto fastNoRoll = s;
+            fastNoRoll.shape.speedShift = 1;
+            fastNoRoll.edits[RollModel::editKeyOf (fastPattern.notes[(size_t) fastRolls.front().first])].removeRoll = true;
+            expectEquals ((int) findRolls (RollModel::build (lib, fastNoRoll)).size(), (int) fastRolls.size() - 1);
+        }
+
         beginTest ("undo history keeps the last 20 changes");
         {
             UndoHistory h;

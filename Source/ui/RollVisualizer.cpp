@@ -292,7 +292,7 @@ int RollVisualizer::rollFirstTick (int noteIndex) const
     auto i = noteIndex;
     while (i > 0 && notes[(size_t) i - 1].rollId == notes[(size_t) noteIndex].rollId)
         --i;
-    return notes[(size_t) i].srcTick;
+    return RollModel::editKeyOf (notes[(size_t) i]);
 }
 
 void RollVisualizer::mouseMove (const juce::MouseEvent& e)
@@ -326,12 +326,18 @@ void RollVisualizer::mouseDown (const juce::MouseEvent& e)
         return;
     }
 
+    if (e.mods.isPopupMenu())
+    {
+        showNoteMenu (hitNote (e.position));
+        return;
+    }
+
     dragNote = hitNote (e.position);
     if (dragNote >= 0)
     {
         const auto& n = processor.getModel().getPattern().notes[(size_t) dragNote];
         const auto edits = processor.getEdits();
-        const auto it = edits.find (n.srcTick);
+        const auto it = edits.find (RollModel::editKeyOf (n));
         dragStartVel = it != edits.end() && it->second.vel > 0 ? it->second.vel : n.vel;
     }
 }
@@ -345,8 +351,8 @@ void RollVisualizer::mouseDrag (const juce::MouseEvent& e)
     if (dragNote >= (int) notes.size())
         return;
 
-    const auto tick = notes[(size_t) dragNote].srcTick;
-    if (tick < 0 || std::abs (e.getDistanceFromDragStartY()) < 3)
+    const auto tick = RollModel::editKeyOf (notes[(size_t) dragNote]);
+    if (std::abs (e.getDistanceFromDragStartY()) < 3)
         return;
 
     dragging = true;
@@ -363,19 +369,74 @@ void RollVisualizer::mouseUp (const juce::MouseEvent& e)
         const auto& notes = processor.getModel().getPattern().notes;
         if (dragNote < (int) notes.size())
         {
-            const auto tick = notes[(size_t) dragNote].srcTick;
-            if (tick >= 0)
-            {
-                auto edits = processor.getEdits();
-                auto edit = edits.count (tick) > 0 ? edits[tick] : NoteEdit {};
-                edit.muted = ! notes[(size_t) dragNote].muted;
-                processor.setNoteEdit (tick, edit);
-            }
+            const auto tick = RollModel::editKeyOf (notes[(size_t) dragNote]);
+            auto edits = processor.getEdits();
+            auto edit = edits.count (tick) > 0 ? edits[tick] : NoteEdit {};
+            edit.muted = ! notes[(size_t) dragNote].muted;
+            processor.setNoteEdit (tick, edit);
         }
     }
 
     dragNote = -1;
     dragging = false;
+}
+
+void RollVisualizer::showNoteMenu (int note)
+{
+    const auto& notes = processor.getModel().getPattern().notes;
+    const auto hasNote = note >= 0 && note < (int) notes.size();
+    const auto inRoll = hasNote && notes[(size_t) note].rollId >= 0;
+    const auto hasEdits = ! processor.getEdits().empty();
+
+    juce::PopupMenu menu;
+    menu.addSectionHeader (hasNote ? (inRoll ? "ROLL NOTE" : "NOTE") : "PATTERN");
+    menu.addItem (1, "Delete note", hasNote);
+    menu.addItem (2, "Delete whole roll", inRoll);
+    menu.addItem (3, hasNote && notes[(size_t) note].muted ? "Unmute note" : "Mute note", hasNote);
+    menu.addSeparator();
+    menu.addItem (4, "Restore all removed / edited notes", hasEdits);
+
+    const auto key = hasNote ? RollModel::editKeyOf (notes[(size_t) note]) : -1;
+    const auto rollKey = inRoll ? rollFirstTick (note) : -1;
+    const auto muted = hasNote && notes[(size_t) note].muted;
+
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this).withMousePosition(),
+                        [safe = juce::Component::SafePointer<RollVisualizer> (this), key, rollKey, muted] (int result)
+                        {
+                            if (safe == nullptr || result == 0)
+                                return;
+
+                            auto& proc = safe->processor;
+                            auto edits = proc.getEdits();
+                            auto editFor = [&edits] (int k) { return edits.count (k) > 0 ? edits[k] : NoteEdit {}; };
+
+                            if (result == 1 && key >= 0)
+                            {
+                                auto e = editFor (key);
+                                e.deleted = true;
+                                proc.setNoteEdit (key, e);
+                            }
+                            else if (result == 2 && rollKey >= 0)
+                            {
+                                auto e = editFor (rollKey);
+                                e.removeRoll = true;
+                                proc.setNoteEdit (rollKey, e);
+                            }
+                            else if (result == 3 && key >= 0)
+                            {
+                                auto e = editFor (key);
+                                e.muted = ! muted;
+                                proc.setNoteEdit (key, e);
+                            }
+                            else if (result == 4)
+                            {
+                                proc.clearEdits();
+                            }
+
+                            proc.commitUndoStep();
+                            safe->hoverNote = -1;
+                            safe->repaint();
+                        });
 }
 
 void RollVisualizer::mouseDoubleClick (const juce::MouseEvent& e)
@@ -388,8 +449,8 @@ void RollVisualizer::mouseDoubleClick (const juce::MouseEvent& e)
     // the first click of the double-click toggled the mute - undo that
     auto edits = processor.getEdits();
     const auto& notes = processor.getModel().getPattern().notes;
-    const auto clickedTick = notes[(size_t) note].srcTick;
-    if (clickedTick >= 0 && edits.count (clickedTick) > 0 && edits[clickedTick].muted)
+    const auto clickedTick = RollModel::editKeyOf (notes[(size_t) note]);
+    if (edits.count (clickedTick) > 0 && edits[clickedTick].muted)
     {
         edits[clickedTick].muted = false;
         processor.setNoteEdit (clickedTick, edits[clickedTick]);

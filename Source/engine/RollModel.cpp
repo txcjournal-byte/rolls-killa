@@ -1,6 +1,8 @@
 #include "RollModel.h"
 #include "VariationEngine.h"
 
+#include <algorithm>
+
 namespace rk
 {
 
@@ -14,6 +16,54 @@ const Preset& RollModel::getPreset() const
 const CategoryProfile& RollModel::getProfile() const
 {
     return getCategoryProfile (getPreset().category);
+}
+
+void RollModel::applyRemovals (Pattern& p, const NoteEdits& edits, bool sourceNotes)
+{
+    if (edits.empty())
+        return;
+
+    auto keyOf = [sourceNotes] (const Note& n) { return sourceNotes ? n.srcTick : (n.srcTick < 0 ? beatToTick (n.beat) : -1); };
+    auto find = [&edits] (int key) -> const NoteEdit* { const auto it = edits.find (key); return it != edits.end() ? &it->second : nullptr; };
+
+    // whole rolls first (refill the grid so the groove keeps going)
+    const auto grid = detectBaseGrid (p);
+    const auto baseVel = detectBaseVelocity (p);
+    for (bool again = true; again;)
+    {
+        again = false;
+        for (const auto& r : findRolls (p))
+        {
+            const auto key = keyOf (p.notes[(size_t) r.first]);
+            if (const auto* e = find (key); key >= 0 && e != nullptr && e->removeRoll)
+            {
+                removeRoll (p, r, grid, baseVel);
+                again = true;
+                break;
+            }
+        }
+    }
+
+    // notes the knobs generated can be muted / re-velocitied by position too
+    if (! sourceNotes)
+        for (auto& n : p.notes)
+            if (n.srcTick < 0)
+                if (const auto* e = find (beatToTick (n.beat)))
+                {
+                    n.muted = n.muted || e->muted;
+                    if (e->vel > 0)
+                        n.vel = juce::jlimit (1, 127, e->vel);
+                }
+
+    // single notes
+    p.notes.erase (std::remove_if (p.notes.begin(), p.notes.end(), [&] (const Note& n)
+                                   {
+                                       const auto key = keyOf (n);
+                                       const auto* e = key >= 0 ? find (key) : nullptr;
+                                       return e != nullptr && e->deleted;
+                                   }),
+                   p.notes.end());
+    p.tidy();
 }
 
 Pattern RollModel::build (const RollLibrary& library, const ModelSettings& s, Pattern* editableOut)
@@ -43,11 +93,18 @@ Pattern RollModel::build (const RollLibrary& library, const ModelSettings& s, Pa
             n.rateOverride = it->second.rate;
     }
 
+    // Removals keyed by source notes (before the knobs)
+    applyRemovals (p, s.edits, true);
     markRolls (p);
     if (editableOut != nullptr)
         *editableOut = p;
 
-    return shapePattern (p, s.shape, profile, s.seed ^ 0x5eedu);
+    auto shaped = shapePattern (p, s.shape, profile, s.seed ^ 0x5eedu);
+
+    // Removals of notes the knobs generated (e.g. a roll re-timed by Roll Speed), keyed by their position
+    applyRemovals (shaped, s.edits, false);
+    markRolls (shaped);
+    return shaped;
 }
 
 bool RollModel::update (const ModelSettings& newSettings, bool force)

@@ -75,6 +75,17 @@ public:
             logMessage (stats.toString());
 
             expectWithinAbsoluteError (stats.rollsPerBar(), 0.8, 0.4);
+
+            // the kits have ~10.5 hits per bar (straight 1/8 backbone + short rolls);
+            // half-time presets count at double time
+            std::vector<double> hitsPerBar;
+            for (const auto* p : all)
+                hitsPerBar.push_back ((double) p->pattern.notes.size() / p->bars() / (p->bpmHint <= 95.0 ? 2.0 : 1.0));
+            std::sort (hitsPerBar.begin(), hitsPerBar.end());
+            const auto median = hitsPerBar[hitsPerBar.size() / 2];
+            logMessage ("median hits per bar: " + juce::String (median, 1));
+            expectGreaterOrEqual (median, 8.0);
+            expectLessOrEqual (median, 14.0);
             expectGreaterOrEqual (stats.flatVelocityShare(), 0.6);
             expectGreaterOrEqual (stats.tripletRollShare(), 0.30);
             expectLessOrEqual (stats.tripletRollShare(), 0.55);

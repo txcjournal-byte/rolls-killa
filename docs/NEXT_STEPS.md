@@ -1,5 +1,9 @@
 # Další krok: presety podle skutečných drumkitů
 
+**Hotovo (v2):** analýza 294 hi-hat MIDI z kitů, všech 96 presetů přepsáno (1/8 základ, krátké
+rolly dopadající na dobu, díry, fráze na 2 takty, rychlé rolly klesají pitchem), mazání not a celých
+rollů pravým klikem ve visualizeru. Zbývá: skutečné hajtky Killa_Hat_01–14.wav a poslech ve FL.
+
 Stav po verzi 1.0 (M1–M6 hotové, Windows build z GitHub Actions funguje):
 
 ## Zpětná vazba z testu ve FL Studiu

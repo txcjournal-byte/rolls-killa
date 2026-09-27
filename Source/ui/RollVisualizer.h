@@ -10,7 +10,8 @@ namespace rk::ui
 /**
     The hero window: the pattern as velocity bars, rolls as glowing clusters, pitch as colour,
     a playhead synced to the host (or preview). Click = mute/unmute a note, drag up/down = velocity,
-    double-click a roll = change its speed, lock icons = keep bars when pressing KILL.
+    double-click a roll = change its speed,
+    right-click = delete a note or the whole roll, lock icons = keep bars when pressing KILL.
 */
 class RollVisualizer : public juce::Component, private juce::Timer
 {
@@ -35,6 +36,7 @@ private:
     int hitLock (juce::Point<float> p) const;
     juce::Rectangle<float> lockBounds (int bar) const;
     int rollFirstTick (int noteIndex) const;
+    void showNoteMenu (int noteIndex);
 
     RollsKillaProcessor& processor;
     SegmentedChoice barsChoice;

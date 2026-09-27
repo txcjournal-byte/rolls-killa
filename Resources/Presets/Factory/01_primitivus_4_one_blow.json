@@ -3,7 +3,7 @@
   "category": "PRIMITIVUS",
   "bpmHint": 135,
   "bars": 4,
-  "tags": ["1/8", "raw"],
+  "tags": ["1/8", "hole"],
   "notes": [
     {"beat": 0.0, "len": 0.125, "vel": 120, "pitch": 0},
     {"beat": 0.5, "len": 0.125, "vel": 120, "pitch": 0},
@@ -20,9 +20,10 @@
     {"beat": 6.0, "len": 0.125, "vel": 120, "pitch": 0},
     {"beat": 6.5, "len": 0.125, "vel": 120, "pitch": 0},
     {"beat": 7.0, "len": 0.125, "vel": 120, "pitch": 0},
-    {"beat": 7.5, "len": 0.083333, "vel": 120, "pitch": 0},
-    {"beat": 7.666667, "len": 0.083333, "vel": 120, "pitch": 0},
-    {"beat": 7.833333, "len": 0.083333, "vel": 120, "pitch": 0},
+    {"beat": 7.5, "len": 0.0625, "vel": 120, "pitch": 0},
+    {"beat": 7.625, "len": 0.0625, "vel": 120, "pitch": 0},
+    {"beat": 7.75, "len": 0.0625, "vel": 120, "pitch": 0},
+    {"beat": 7.875, "len": 0.0625, "vel": 120, "pitch": 0},
     {"beat": 8.0, "len": 0.125, "vel": 120, "pitch": 0},
     {"beat": 8.5, "len": 0.125, "vel": 120, "pitch": 0},
     {"beat": 9.0, "len": 0.125, "vel": 120, "pitch": 0},
@@ -36,10 +37,10 @@
     {"beat": 13.0, "len": 0.125, "vel": 120, "pitch": 0},
     {"beat": 13.5, "len": 0.125, "vel": 120, "pitch": 0},
     {"beat": 14.0, "len": 0.125, "vel": 120, "pitch": 0},
-    {"beat": 14.5, "len": 0.125, "vel": 120, "pitch": 0},
-    {"beat": 15.0, "len": 0.0625, "vel": 120, "pitch": 0},
-    {"beat": 15.125, "len": 0.0625, "vel": 120, "pitch": 0},
-    {"beat": 15.25, "len": 0.0625, "vel": 120, "pitch": 0},
-    {"beat": 15.375, "len": 0.125, "vel": 120, "pitch": 0}
+    {"beat": 14.5, "len": 0.0625, "vel": 120, "pitch": 0},
+    {"beat": 14.625, "len": 0.0625, "vel": 120, "pitch": 0},
+    {"beat": 14.75, "len": 0.0625, "vel": 120, "pitch": 0},
+    {"beat": 14.875, "len": 0.0625, "vel": 120, "pitch": 0},
+    {"beat": 15.0, "len": 0.125, "vel": 120, "pitch": 0}
   ]
 }

@@ -201,6 +201,8 @@ NoteEdits RollsKillaProcessor::getEdits() const
         e.muted = child.getProperty ("muted", false);
         e.vel = child.getProperty ("vel", -1);
         e.rate = child.getProperty ("rate", -1);
+        e.deleted = child.getProperty ("deleted", false);
+        e.removeRoll = child.getProperty ("removeRoll", false);
         edits[(int) child.getProperty ("tick", 0)] = e;
     }
     return edits;
@@ -226,6 +228,8 @@ void RollsKillaProcessor::setNoteEdit (int tick, const NoteEdit& edit)
         existing.setProperty ("muted", edit.muted, nullptr);
         existing.setProperty ("vel", edit.vel, nullptr);
         existing.setProperty ("rate", edit.rate, nullptr);
+        existing.setProperty ("deleted", edit.deleted, nullptr);
+        existing.setProperty ("removeRoll", edit.removeRoll, nullptr);
     }
 
     rebuildPattern();

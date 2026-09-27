@@ -57,7 +57,7 @@ zástupné closed hats (stejná jména, podobná délka a jas). Vlastní WAV lze
 |---|---|
 | **PRESETS** (lišta) | klik otevře Preset Browser, ◀ ▶ = předchozí/další preset, ★ = oblíbené |
 | **Preset Browser** | 12 kategorií + USER + FAVORITES, hledání, klik = načíst a hrát, ↑↓ listování, Enter, Esc, **SAVE** = uložit jako user preset |
-| **Roll Visualizer** | klik na notu = mute, tažení nahoru/dolů = velocity, dvojklik na roll = rychlost (1/24 → 1/32 → 1/48 → 1/64 → 1/96), zámek = takt, který KILL nemění, **BARS** 1/2/4/8 |
+| **Roll Visualizer** | klik na notu = mute, tažení nahoru/dolů = velocity, dvojklik na roll = rychlost (1/24 → 1/32 → 1/48 → 1/64 → 1/96), **pravý klik = smazat notu / smazat celý roll / obnovit vše**, zámek = takt, který KILL nemění, **BARS** 1/2/4/8 |
 | **ROLL SPEED** | Slower / Original / Faster – posune rychlost všech rollů o krok |
 | **VELOCITY** | Original / Flat / Ramp Up / Ramp Down (jen v rollech) |
 | **DENSITY** | 100 % = originál, méně = ubírá rolly, víc = přidává krátké rolly na osminy |

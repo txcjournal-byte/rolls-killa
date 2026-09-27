@@ -15,9 +15,14 @@ struct NoteEdit
     bool muted = false;
     int vel = -1;           // -1 = keep
     int rate = -1;          // on a roll's first note: forced rate index, -1 = keep
+    bool deleted = false;   // note removed from the pattern
+    bool removeRoll = false;// on a roll's first note: the whole roll is removed (grid refilled)
 
-    bool operator== (const NoteEdit& o) const noexcept { return muted == o.muted && vel == o.vel && rate == o.rate; }
-    bool isEmpty() const noexcept { return ! muted && vel < 0 && rate < 0; }
+    bool operator== (const NoteEdit& o) const noexcept
+    {
+        return muted == o.muted && vel == o.vel && rate == o.rate && deleted == o.deleted && removeRoll == o.removeRoll;
+    }
+    bool isEmpty() const noexcept { return ! muted && vel < 0 && rate < 0 && ! deleted && ! removeRoll; }
 };
 
 using NoteEdits = std::map<int, NoteEdit>;
@@ -69,7 +74,12 @@ public:
     /** Builds the whole chain for the given settings without touching the model (tests, export). */
     static Pattern build (const RollLibrary& library, const ModelSettings& settings, Pattern* editableOut = nullptr);
 
+    /** Edit key of a note in the final pattern (source tick, or position for generated notes). */
+    static int editKeyOf (const Note& n) noexcept { return n.srcTick >= 0 ? n.srcTick : beatToTick (n.beat); }
+
 private:
+    static void applyRemovals (Pattern& p, const NoteEdits& edits, bool sourceNotes);
+
     RollLibrary& library;
     ModelSettings settings;
     bool valid = false;

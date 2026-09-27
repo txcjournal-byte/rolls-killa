@@ -17,11 +17,11 @@
     {"beat": 2.25, "len": 0.125, "vel": 95, "pitch": 0},
     {"beat": 2.5, "len": 0.125, "vel": 95, "pitch": 0},
     {"beat": 2.75, "len": 0.125, "vel": 95, "pitch": 0},
-    {"beat": 3.0, "len": 0.083333, "vel": 95, "pitch": 0},
-    {"beat": 3.166667, "len": 0.083333, "vel": 95, "pitch": 0},
-    {"beat": 3.333333, "len": 0.083333, "vel": 95, "pitch": 0},
-    {"beat": 3.5, "len": 0.083333, "vel": 95, "pitch": 0},
-    {"beat": 3.666667, "len": 0.083333, "vel": 95, "pitch": 0},
-    {"beat": 3.833333, "len": 0.083333, "vel": 95, "pitch": 0}
+    {"beat": 3.0, "len": 0.125, "vel": 95, "pitch": 0},
+    {"beat": 3.25, "len": 0.125, "vel": 95, "pitch": 0},
+    {"beat": 3.5, "len": 0.0625, "vel": 95, "pitch": 0},
+    {"beat": 3.625, "len": 0.0625, "vel": 95, "pitch": 0},
+    {"beat": 3.75, "len": 0.0625, "vel": 95, "pitch": 0},
+    {"beat": 3.875, "len": 0.0625, "vel": 95, "pitch": 0}
   ]
 }
