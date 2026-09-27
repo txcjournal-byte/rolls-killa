@@ -195,6 +195,98 @@ int main (int argc, char* argv[])
                 writer->writeFromAudioSampleBuffer (out, 0, totalSamples);
     }
 
+    if (checkOnly)
+    {
+        auto expectTrue = [&failures] (bool ok, const char* what)
+        {
+            std::cout << (ok ? "ok   " : "FAIL ") << what << std::endl;
+            failures += ok ? 0 : 1;
+        };
+
+        auto samePattern = [] (const rk::Pattern& a, const rk::Pattern& b)
+        {
+            if (a.notes.size() != b.notes.size() || a.bars != b.bars)
+                return false;
+            for (size_t i = 0; i < a.notes.size(); ++i)
+                if (std::abs (a.notes[i].beat - b.notes[i].beat) > 1.0e-9 || a.notes[i].vel != b.notes[i].vel
+                    || a.notes[i].pitch != b.notes[i].pitch || a.notes[i].muted != b.notes[i].muted)
+                    return false;
+            return true;
+        };
+
+        auto set = [&proc] (const char* id, float v)
+        {
+            auto* prm = proc.getState().getParameter (id);
+            prm->setValueNotifyingHost (prm->convertTo0to1 (v));
+        };
+
+        // ---- state round trip -------------------------------------------------
+        proc.loadPreset (lib.search ("Codex Trappus").front());
+        set (rk::params::bars, 2.0f);
+        set (rk::params::density, 140.0f);
+        set (rk::params::swing, 20.0f);
+        set (rk::params::rollSpeed, 2.0f);
+        proc.rebuildPattern();
+        proc.kill();
+        proc.setBarLocked (1, true);
+        const auto firstTick = proc.getModel().getEditablePattern().notes.front().srcTick;
+        proc.setNoteEdit (firstTick, { true, -1, -1 });
+        const auto before = proc.getModel().getPattern();
+
+        juce::MemoryBlock state;
+        proc.getStateInformation (state);
+
+        std::unique_ptr<juce::AudioProcessor> other (createPluginFilter());
+        auto& proc2 = dynamic_cast<RollsKillaProcessor&> (*other);
+        proc2.setStateInformation (state.getData(), (int) state.getSize());
+        expectTrue (samePattern (before, proc2.getModel().getPattern()), "state round trip restores the exact pattern");
+        expectTrue (proc2.getSeed() == proc.getSeed() && proc2.getSeed() != 0, "KILL seed restored");
+        expectTrue (proc2.getLockedBars() == 2u, "bar locks restored");
+        expectTrue (proc2.getEdits().size() == 1 && proc2.getEdits().begin()->second.muted, "visualizer edits restored");
+        expectTrue (proc2.getModel().getPattern().notes.front().muted, "muted note stays muted");
+
+        // ---- undo / redo ------------------------------------------------------
+        {
+            std::unique_ptr<juce::AudioProcessor> third (createPluginFilter());
+            auto& p3 = dynamic_cast<RollsKillaProcessor&> (*third);
+            const auto original = p3.getModel().getPattern();
+            p3.kill();
+            const auto killed = p3.getModel().getPattern();
+            expectTrue (p3.canUndo(), "KILL can be undone");
+            p3.undo();
+            expectTrue (samePattern (original, p3.getModel().getPattern()), "undo restores the pattern before KILL");
+            p3.redo();
+            expectTrue (samePattern (killed, p3.getModel().getPattern()), "redo brings the KILL back");
+        }
+
+        // ---- performance ------------------------------------------------------
+        {
+            proc.loadPreset (lib.search ("Thrash Chapel").front());
+            set (rk::params::bars, 3.0f);
+            set (rk::params::density, 200.0f);
+            set (rk::params::rollSpeed, 2.0f);
+            set (rk::params::choke, 0.0f);
+            proc.rebuildPattern();
+            playHead.bpm = 165.0;
+            playHead.playing = true;
+            juce::AudioBuffer<float> buf (2, 128);
+            juce::MidiBuffer midi;
+            const int blocks = (int) (sr * 20.0 / 128.0);   // 20 s of audio
+            const auto t0 = juce::Time::getMillisecondCounterHiRes();
+            for (int b = 0; b < blocks; ++b)
+            {
+                playHead.ppq = b * 128.0 * playHead.bpm / 60.0 / sr;
+                midi.clear();
+                proc.processBlock (buf, midi);
+            }
+            const auto ms = juce::Time::getMillisecondCounterHiRes() - t0;
+            const auto cpu = ms / 20000.0 * 100.0;
+            std::cout << "     20 s of the densest pattern (128-sample blocks, no choke) took " << juce::String (ms, 1)
+                      << " ms = " << juce::String (cpu, 2) << " % CPU" << std::endl;
+            expectTrue (cpu < 5.0, "processBlock uses < 5 % of one core");
+        }
+    }
+
     proc.releaseResources();
     proc.setPlayHead (nullptr);
     std::cout << (failures == 0 ? "RENDER OK" : "RENDER FAILURES: " + std::to_string (failures)) << std::endl;

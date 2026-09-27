@@ -72,6 +72,8 @@ public:
     bool redo();
     bool canUndo() const noexcept { return history.canUndo(); }
     bool canRedo() const noexcept { return history.canRedo(); }
+    /** Records the current state as an undo step now (discrete actions; knob drags are debounced). */
+    void commitUndoStep();
 
     // Sampler
     juce::String loadCustomSample (const juce::File& file);

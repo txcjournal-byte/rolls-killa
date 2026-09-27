@@ -83,6 +83,12 @@ void RollsKillaProcessor::parameterChanged (const juce::String&, float)
     lastChangeMs.store (juce::Time::getMillisecondCounter());
 }
 
+void RollsKillaProcessor::commitUndoStep()
+{
+    stateChanged.store (false);
+    history.push (apvts.copyState());
+}
+
 void RollsKillaProcessor::markStateChanged()
 {
     patternDirty.store (true);
@@ -97,10 +103,7 @@ void RollsKillaProcessor::timerCallback()
 
     // Record an undo step once the user stopped touching things for a moment (knob drags = 1 step).
     if (stateChanged.load() && juce::Time::getMillisecondCounter() - lastChangeMs.load() > 350)
-    {
-        stateChanged.store (false);
-        history.push (apvts.copyState());
-    }
+        commitUndoStep();
 
     patternSlot.collectGarbage();
 }
@@ -142,7 +145,7 @@ void RollsKillaProcessor::loadPreset (int index)
     setParam (params::seed, 0.0f);
     setParam (params::preset, (float) index);
     rebuildPattern();
-    markStateChanged();
+    commitUndoStep();
 }
 
 void RollsKillaProcessor::stepPreset (int delta)
@@ -163,7 +166,7 @@ void RollsKillaProcessor::kill()
     apvts.state.removeChild (apvts.state.getChildWithName (kEditsType), nullptr);
     setParam (params::seed, (float) next);
     rebuildPattern();
-    markStateChanged();
+    commitUndoStep();
 }
 
 void RollsKillaProcessor::resetVariation()
@@ -171,7 +174,7 @@ void RollsKillaProcessor::resetVariation()
     apvts.state.removeChild (apvts.state.getChildWithName (kEditsType), nullptr);
     setParam (params::seed, 0.0f);
     rebuildPattern();
-    markStateChanged();
+    commitUndoStep();
 }
 
 uint32_t RollsKillaProcessor::getLockedBars() const
@@ -184,7 +187,8 @@ void RollsKillaProcessor::setBarLocked (int bar, bool locked)
     auto mask = getLockedBars();
     mask = locked ? (mask | (1u << bar)) : (mask & ~(1u << bar));
     apvts.state.setProperty (kLockedBarsProp, (int) mask, nullptr);
-    markStateChanged();
+    rebuildPattern();
+    commitUndoStep();
 }
 
 NoteEdits RollsKillaProcessor::getEdits() const
@@ -275,7 +279,7 @@ juce::String RollsKillaProcessor::loadCustomSample (const juce::File& file)
 
     apvts.state.setProperty (kCustomSampleProp, file.getFullPathName(), nullptr);
     setParam (params::hat, (float) HatSampler::kCustomSlot);
-    markStateChanged();
+    commitUndoStep();
     return {};
 }
 
