@@ -53,6 +53,10 @@ set(ROLLSKILLA_ENGINE_SOURCES
     Source/engine/CategoryProfile.cpp
     Source/engine/RollLibrary.cpp
     Source/engine/PresetValidator.cpp
+    Source/engine/HatSynth.cpp
+    Source/engine/HatSampler.cpp
+    Source/engine/PatternPlayer.cpp
+    Source/engine/RollModel.cpp
 )
 
 set(ROLLSKILLA_COMMON_DEFINITIONS
@@ -101,6 +105,7 @@ juce_add_plugin(RollsKilla
 target_sources(RollsKilla PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
+    Source/Parameters.cpp
     ${ROLLSKILLA_ENGINE_SOURCES}
 )
 
@@ -133,6 +138,8 @@ if(ROLLSKILLA_BUILD_TESTS)
     target_sources(RollsKillaTests PRIVATE
         Tests/TestMain.cpp
         Tests/LibraryTests.cpp
+        Tests/SamplerTests.cpp
+        Tests/PlayerTests.cpp
         ${ROLLSKILLA_ENGINE_SOURCES}
     )
 
@@ -154,4 +161,18 @@ if(ROLLSKILLA_BUILD_TESTS)
     )
 
     add_test(NAME RollsKillaTests COMMAND RollsKillaTests)
+endif()
+
+# ---------------------------------------------------------------------------
+# Offline renderer (listening tests + processor smoke test)
+# ---------------------------------------------------------------------------
+if(ROLLSKILLA_BUILD_TESTS)
+    juce_add_console_app(RollsKillaRender PRODUCT_NAME "RollsKillaRender")
+    target_sources(RollsKillaRender PRIVATE tools/render/RenderMain.cpp)
+    # Links the plugin's shared code directly (JUCE modules are already compiled into it).
+    target_include_directories(RollsKillaRender PRIVATE Source "${juce_SOURCE_DIR}/modules"
+        "$<TARGET_PROPERTY:RollsKilla,INCLUDE_DIRECTORIES>")
+    target_compile_definitions(RollsKillaRender PRIVATE "$<TARGET_PROPERTY:RollsKilla,COMPILE_DEFINITIONS>")
+    target_link_libraries(RollsKillaRender PRIVATE RollsKilla juce::juce_recommended_config_flags)
+    add_test(NAME RollsKillaRenderCheck COMMAND RollsKillaRender render-check --check)
 endif()
