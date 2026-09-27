@@ -62,6 +62,64 @@ int main (int argc, char* argv[])
 
     auto& lib = proc.getLibrary();
 
+    if (args.contains ("--demo"))
+    {
+        // One listening file: calmest (1) and craziest (8) preset of every category, one loop each.
+        const auto file = outDir.getChildFile ("RollsKilla_Demo.wav");
+        juce::AudioBuffer<float> demo (1, 0);
+        std::cout << "Demo order:" << std::endl;
+        double t = 0.0;
+
+        for (int c = 0; c < rk::kNumFactoryCategories; ++c)
+        {
+            const auto idx = lib.presetsInCategory (c);
+            for (auto i : { idx.front(), idx.back() })
+            {
+                const auto& preset = lib.getPreset (i);
+                proc.loadPreset (i);
+                if (auto* barsParam = proc.getState().getParameter (rk::params::bars))
+                    barsParam->setValueNotifyingHost (barsParam->convertTo0to1 ((float) rk::params::choiceFromBars (juce::jmin (2, preset.bars()))));
+                proc.rebuildPattern();
+                proc.prepareToPlay (sr, block);
+
+                playHead.bpm = preset.bpmHint;
+                const auto loopBeats = proc.getModel().getPattern().lengthBeats() * (preset.bars() == 1 ? 2 : 1);
+                const auto n = (int) std::ceil (loopBeats * 60.0 / playHead.bpm * sr);
+                const auto gap = (int) (0.6 * sr);
+                const auto start = demo.getNumSamples();
+                demo.setSize (1, start + n + gap, true, true);
+
+                juce::AudioBuffer<float> buf (2, block);
+                juce::MidiBuffer midi;
+                for (int pos = 0; pos < n + gap; pos += block)
+                {
+                    const auto len = std::min (block, n + gap - pos);
+                    playHead.playing = pos < n;
+                    playHead.ppq = pos * playHead.bpm / 60.0 / sr;
+                    buf.setSize (2, len, false, false, true);
+                    midi.clear();
+                    proc.processBlock (buf, midi);
+                    demo.addFrom (0, start + pos, buf, 0, 0, len, 0.5f);
+                    demo.addFrom (0, start + pos, buf, 1, 0, len, 0.5f);
+                }
+
+                std::cout << "  " << juce::String (t, 1).paddedLeft (' ', 6) << " s  "
+                          << juce::String (rk::getCategoryProfile (c).name).paddedRight (' ', 13) << " " << preset.name
+                          << " (" << (int) preset.bpmHint << " BPM)" << std::endl;
+                t += (double) (n + gap) / sr;
+            }
+        }
+
+        demo.applyGain (0.8f / juce::jmax (0.001f, demo.getMagnitude (0, 0, demo.getNumSamples())));
+        file.deleteFile();
+        juce::WavAudioFormat wav;
+        std::unique_ptr<juce::OutputStream> stream (file.createOutputStream());
+        if (auto writer = wav.createWriterFor (stream, juce::AudioFormatWriterOptions {}.withSampleRate (sr).withNumChannels (1).withBitsPerSample (16)))
+            writer->writeFromAudioSampleBuffer (demo, 0, demo.getNumSamples());
+        std::cout << "wrote " << file.getFullPathName() << std::endl;
+        return 0;
+    }
+
     if (screenshot)
     {
         // Renders the editor (and the preset browser) to PNG files in outDir.

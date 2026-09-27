@@ -46,4 +46,4 @@ jobs:
         run: |
           curl -sSL -o pv.zip https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_Linux.zip
           unzip -q pv.zip
-          xvfb-run -a ./pluginval --strictness-level 5 --validate-in-process "build/RollsKilla_artefacts/Release/VST3/Rolls Killa.vst3"
+          xvfb-run -a ./pluginval --strictness-level 10 --validate-in-process "build/RollsKilla_artefacts/Release/VST3/Rolls Killa.vst3"

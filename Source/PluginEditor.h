@@ -39,7 +39,7 @@ private:
     void exportMidi();
     void updateStatus();
 
-    RollsKillaProcessor& processor;
+    RollsKillaProcessor& proc;
     rk::ui::KillaLookAndFeel lookAndFeel;
     Content content { *this };
     juce::Image logo;

@@ -24,10 +24,8 @@ public:
             for (int c = 0; c < kNumFactoryCategories; ++c)
                 expectEquals ((int) lib.presetsInCategory (c).size(), perCategory, getCategoryProfile (c).name);
             expectEquals (lib.getNumFactoryPresets(), perCategory * kNumFactoryCategories);
-           #if ROLLSKILLA_FULL_LIBRARY
             expectEquals (lib.getNumFactoryPresets(), 96);
             expectEquals (perCategory, 8);
-           #endif
         }
 
         beginTest ("all factory presets pass validation");
@@ -36,6 +34,22 @@ public:
             const auto& p = lib.getPreset (i);
             const auto errors = validatePreset (p);
             expect (errors.isEmpty(), p.name + ": " + errors.joinIntoString ("; "));
+        }
+
+        beginTest ("every category runs from calm (1) to crazy (8)");
+        for (int c = 0; c < kNumFactoryCategories; ++c)
+        {
+            const auto idx = lib.presetsInCategory (c);
+            auto density = [&] (int i)
+            {
+                // all hits + extra weight for fast roll notes, per bar
+                const auto& p = lib.getPreset (i).pattern;
+                int fast = 0;
+                for (const auto& r : findRolls (p))
+                    fast += r.count;
+                return (double) (p.notes.size() + (size_t) fast) / p.bars;
+            };
+            expectLessThan (density (idx.front()), density (idx.back()), getCategoryProfile (c).name);
         }
 
         beginTest ("preset names are unique and bars match the pattern");
@@ -62,12 +76,13 @@ public:
 
             expectWithinAbsoluteError (stats.rollsPerBar(), 0.8, 0.4);
             expectGreaterOrEqual (stats.flatVelocityShare(), 0.6);
-           #if ROLLSKILLA_FULL_LIBRARY
             expectGreaterOrEqual (stats.tripletRollShare(), 0.30);
             expectLessOrEqual (stats.tripletRollShare(), 0.55);
-           #else
-            expectGreaterOrEqual (stats.tripletRollShare(), 0.25);
-           #endif
+
+            // spec 3.2: 80 % flat, 13.5 % ramp up, 6.5 % ramp down; rolls start on the beat or the 1/8
+            expectGreaterOrEqual ((double) stats.rampUpRolls / stats.rolls, 0.05);
+            expectGreaterOrEqual ((double) stats.rampDownRolls / stats.rolls, 0.02);
+            expectGreaterOrEqual ((double) (stats.rollsOnBeat + stats.rollsOnEighth) / stats.rolls, 0.75);
         }
 
         beginTest ("json round trip");

@@ -83,7 +83,9 @@ class KillButton : public juce::Button
 public:
     KillButton();
     void paintButton (juce::Graphics&, bool highlighted, bool down) override;
+    void mouseDown (const juce::MouseEvent&) override;
     juce::String seedText;
+    std::function<void()> onBackToOriginal;
 };
 
 //==============================================================================

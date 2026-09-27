@@ -1,0 +1,17 @@
+{
+  "name": "Trine Tick",
+  "category": "TRINITAS",
+  "bpmHint": 150,
+  "bars": 1,
+  "tags": ["skip"],
+  "notes": [
+    {"beat": 0.0, "len": 0.125, "vel": 96, "pitch": 0},
+    {"beat": 0.666667, "len": 0.125, "vel": 96, "pitch": 0},
+    {"beat": 1.5, "len": 0.083333, "vel": 96, "pitch": 0},
+    {"beat": 1.666667, "len": 0.083333, "vel": 96, "pitch": 0},
+    {"beat": 1.833333, "len": 0.125, "vel": 96, "pitch": 0},
+    {"beat": 2.666667, "len": 0.125, "vel": 96, "pitch": 0},
+    {"beat": 3.333333, "len": 0.125, "vel": 96, "pitch": 0},
+    {"beat": 3.666667, "len": 0.125, "vel": 96, "pitch": 0}
+  ]
+}

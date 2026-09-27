@@ -177,7 +177,7 @@ endif()
 # ---------------------------------------------------------------------------
 # Offline renderer (listening tests + processor smoke test)
 # ---------------------------------------------------------------------------
-if(ROLLSKILLA_BUILD_TESTS)
+if(ROLLSKILLA_BUILD_TESTS AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.27)
     juce_add_console_app(RollsKillaRender PRODUCT_NAME "RollsKillaRender")
     target_sources(RollsKillaRender PRIVATE tools/render/RenderMain.cpp)
     # Links the plugin's shared code directly (JUCE modules are already compiled into it).

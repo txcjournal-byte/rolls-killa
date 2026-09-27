@@ -246,6 +246,24 @@ KillButton::KillButton() : juce::Button ("KILL")
     setTooltip ("KILL - new variation of this preset (right-click: back to original)");
 }
 
+void KillButton::mouseDown (const juce::MouseEvent& e)
+{
+    if (! e.mods.isPopupMenu())
+    {
+        juce::Button::mouseDown (e);
+        return;
+    }
+
+    juce::PopupMenu menu;
+    menu.addItem (1, "Back to the original preset", seedText.isNotEmpty());
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
+                        [safe = juce::Component::SafePointer<KillButton> (this)] (int result)
+                        {
+                            if (safe != nullptr && result == 1 && safe->onBackToOriginal != nullptr)
+                                safe->onBackToOriginal();
+                        });
+}
+
 void KillButton::paintButton (juce::Graphics& g, bool highlighted, bool down)
 {
     auto r = getLocalBounds().toFloat().reduced (6.0f);

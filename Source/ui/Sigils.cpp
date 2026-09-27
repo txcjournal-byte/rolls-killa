@@ -24,8 +24,11 @@ void drawSigil (juce::Graphics& g, int category, juce::Rectangle<float> area, ju
         case 0: // PRIMITIVUS - bone club: crossed bones
             p.startNewSubPath (c.x - s * 0.8f, c.y + s * 0.8f); p.lineTo (c.x + s * 0.8f, c.y - s * 0.8f);
             p.startNewSubPath (c.x - s * 0.8f, c.y - s * 0.8f); p.lineTo (c.x + s * 0.8f, c.y + s * 0.8f);
-            for (auto [dx, dy] : { std::pair { -1.0f, -1.0f }, { 1.0f, -1.0f }, { -1.0f, 1.0f }, { 1.0f, 1.0f } })
-                p.addEllipse (c.x + dx * s * 0.8f - s * 0.16f, c.y + dy * s * 0.8f - s * 0.16f, s * 0.32f, s * 0.32f);
+        {
+            const juce::Point<float> ends[] { { -1.0f, -1.0f }, { 1.0f, -1.0f }, { -1.0f, 1.0f }, { 1.0f, 1.0f } };
+            for (const auto& d : ends)
+                p.addEllipse (c.x + d.x * s * 0.8f - s * 0.16f, c.y + d.y * s * 0.8f - s * 0.16f, s * 0.32f, s * 0.32f);
+        }
             break;
 
         case 1: // LIBER TRAP - triangle over an open book line

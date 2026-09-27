@@ -75,7 +75,7 @@ void RollsKillaEditor::Content::paint (juce::Graphics& g)
 //==============================================================================
 RollsKillaEditor::RollsKillaEditor (RollsKillaProcessor& p)
     : AudioProcessorEditor (&p),
-      processor (p),
+      proc (p),
       visualizer (p),
       presetBar (p),
       rollSpeed (p.getState(), params::rollSpeed, params::rollSpeedChoices),
@@ -111,11 +111,11 @@ RollsKillaEditor::RollsKillaEditor (RollsKillaProcessor& p)
         content.addAndMakeVisible (b);
     undoButton.setTooltip ("Undo (Ctrl+Z)");
     redoButton.setTooltip ("Redo (Ctrl+Shift+Z)");
-    undoButton.onClick = [this] { processor.undo(); updateStatus(); };
-    redoButton.onClick = [this] { processor.redo(); updateStatus(); };
+    undoButton.onClick = [this] { proc.undo(); updateStatus(); };
+    redoButton.onClick = [this] { proc.redo(); updateStatus(); };
     previewButton.label = "PREVIEW";
     previewButton.setTooltip ("Play the pattern at the preset's tempo while the host is stopped");
-    previewButton.onClick = [this] { processor.setPreviewEnabled (! processor.isPreviewEnabled()); updateStatus(); };
+    previewButton.onClick = [this] { proc.setPreviewEnabled (! proc.isPreviewEnabled()); updateStatus(); };
 
     for (auto* c : std::initializer_list<juce::Component*> { &rollSpeed, &velMode, &density, &groove, &pitchRamp, &swing, &variation,
                                                               &hatSelector, &waveform, &tune, &decay, &volume, &chokeSwitch,
@@ -129,14 +129,13 @@ RollsKillaEditor::RollsKillaEditor (RollsKillaProcessor& p)
     loadWavButton.label = "LOAD WAV";
     loadWavButton.setTooltip ("Load your own hi-hat (WAV/AIFF) - or drop it on the waveform");
     loadWavButton.onClick = [this] { chooseCustomSample(); };
-    waveform.onFileDropped = [this] (const juce::File& f) { processor.loadCustomSample (f); shownHat = -1; };
+    waveform.onFileDropped = [this] (const juce::File& f) { proc.loadCustomSample (f); shownHat = -1; };
     hatSelector.onChange = [this] { shownHat = -1; };
 
-    killButton.onClick = [this] { processor.kill(); updateStatus(); };
-    killButton.addMouseListener (this, false);
-    killButton.onStateChange = [] {};
+    killButton.onClick = [this] { proc.kill(); updateStatus(); };
+    killButton.onBackToOriginal = [this] { proc.resetVariation(); updateStatus(); };
 
-    dragZone.createFile = [this] { return processor.createDragMidiFile(); };
+    dragZone.createFile = [this] { return proc.createDragMidiFile(); };
     dragZone.setTooltip ("Drag the pattern into your DAW (FL Studio: drop on the Playlist or a Piano roll)");
     exportButton.label = "EXPORT .MID";
     exportButton.onClick = [this] { exportMidi(); };
@@ -144,10 +143,10 @@ RollsKillaEditor::RollsKillaEditor (RollsKillaProcessor& p)
     content.addChildComponent (browser);
     browser.onPresetLoaded = [this] { updateStatus(); };
 
-    waveform.setSample (processor.getSampler().getSample (hatSelector.getIndex()));
+    waveform.setSample (proc.getSampler().getSample (hatSelector.getIndex()));
     shownHat = hatSelector.getIndex();
 
-    uiScale = (float) (double) processor.getState().state.getProperty (kUiScaleProp, 1.0);
+    uiScale = (float) (double) proc.getState().state.getProperty (kUiScaleProp, 1.0);
     setWantsKeyboardFocus (true);
     layout();
     setUiScale (uiScale);
@@ -164,7 +163,7 @@ RollsKillaEditor::~RollsKillaEditor()
 void RollsKillaEditor::setUiScale (float scale)
 {
     uiScale = juce::jlimit (1.0f, 1.5f, scale);
-    processor.getState().state.setProperty (kUiScaleProp, uiScale, nullptr);
+    proc.getState().state.setProperty (kUiScaleProp, uiScale, nullptr);
     content.setTransform (juce::AffineTransform::scale (uiScale));
     logo = {};
     setSize (juce::roundToInt (kBaseWidth * uiScale), juce::roundToInt (kBaseHeight * uiScale));
@@ -222,18 +221,18 @@ void RollsKillaEditor::layout()
 
 void RollsKillaEditor::updateStatus()
 {
-    undoButton.setEnabled (processor.canUndo());
-    redoButton.setEnabled (processor.canRedo());
+    undoButton.setEnabled (proc.canUndo());
+    redoButton.setEnabled (proc.canRedo());
 
-    const auto hostPlaying = processor.isHostPlaying();
-    const auto previewing = processor.isPreviewEnabled() && ! hostPlaying;
+    const auto hostPlaying = proc.isHostPlaying();
+    const auto previewing = proc.isPreviewEnabled() && ! hostPlaying;
     previewButton.setToggleState (previewing, juce::dontSendNotification);
     previewButton.setIcon (previewing ? Icon::stop : Icon::play);
     previewButton.label = hostPlaying ? "HOST SYNC" : previewing ? "STOP" : "PREVIEW";
     previewButton.setEnabled (! hostPlaying);
     previewButton.repaint();
 
-    const auto seed = processor.getSeed();
+    const auto seed = proc.getSeed();
     killButton.seedText = seed != 0 ? "#" + juce::String ((int) seed) : juce::String();
     killButton.repaint();
 
@@ -242,7 +241,7 @@ void RollsKillaEditor::updateStatus()
 
 void RollsKillaEditor::timerCallback()
 {
-    const auto version = processor.getPatternVersion();
+    const auto version = proc.getPatternVersion();
     if (version != shownPatternVersion)
     {
         shownPatternVersion = version;
@@ -253,7 +252,7 @@ void RollsKillaEditor::timerCallback()
     if (hat != shownHat)
     {
         shownHat = hat;
-        waveform.setSample (processor.getSampler().getSample (hat));
+        waveform.setSample (proc.getSampler().getSample (hat));
     }
 
     updateStatus();
@@ -264,19 +263,19 @@ bool RollsKillaEditor::keyPressed (const juce::KeyPress& key)
     const auto cmd = key.getModifiers().isCommandDown();
     if (cmd && key.getKeyCode() == 'Z')
     {
-        key.getModifiers().isShiftDown() ? processor.redo() : processor.undo();
+        key.getModifiers().isShiftDown() ? proc.redo() : proc.undo();
         updateStatus();
         return true;
     }
     if (cmd && key.getKeyCode() == 'Y')
     {
-        processor.redo();
+        proc.redo();
         updateStatus();
         return true;
     }
     if (key == juce::KeyPress::leftKey || key == juce::KeyPress::rightKey)
     {
-        processor.stepPreset (key == juce::KeyPress::leftKey ? -1 : 1);
+        proc.stepPreset (key == juce::KeyPress::leftKey ? -1 : 1);
         updateStatus();
         return true;
     }
@@ -292,7 +291,7 @@ void RollsKillaEditor::chooseCustomSample()
                                   const auto file = fc.getResult();
                                   if (file.existsAsFile())
                                   {
-                                      const auto error = processor.loadCustomSample (file);
+                                      const auto error = proc.loadCustomSample (file);
                                       if (error.isNotEmpty())
                                           juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Rolls Killa", error);
                                       shownHat = -1;
@@ -302,7 +301,7 @@ void RollsKillaEditor::chooseCustomSample()
 
 void RollsKillaEditor::exportMidi()
 {
-    const auto name = "Rolls Killa - " + processor.getModel().getPreset().name + ".mid";
+    const auto name = "Rolls Killa - " + proc.getModel().getPreset().name + ".mid";
     fileChooser = std::make_unique<juce::FileChooser> ("Export MIDI",
                                                        juce::File::getSpecialLocation (juce::File::userDocumentsDirectory)
                                                            .getChildFile (juce::File::createLegalFileName (name)),
@@ -315,7 +314,7 @@ void RollsKillaEditor::exportMidi()
                                       return;
                                   if (! file.hasFileExtension ("mid"))
                                       file = file.withFileExtension ("mid");
-                                  if (! processor.exportMidi (file))
+                                  if (! proc.exportMidi (file))
                                       juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Rolls Killa",
                                                                               "Could not write " + file.getFullPathName());
                               });
