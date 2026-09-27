@@ -9,9 +9,10 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Configure
-        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+        # no -G: CMake picks the newest Visual Studio on the runner (2022 or 2026)
+        run: cmake -S . -B build -A x64
       - name: Build
         run: cmake --build build --config Release --parallel
       - name: Test
@@ -30,7 +31,7 @@ jobs:
   linux:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install dependencies
         run: |
           sudo apt-get update
