@@ -71,7 +71,9 @@ def find_rolls(notes: list[Note]) -> list[Roll]:
     n = len(notes)
     while i < n:
         j = i
-        while j + 1 < n and notes[j + 1].beat - notes[j].beat < ROLL_THRESHOLD - EPS:
+        # a roll never continues over a bar line (a roll that lands on the downbeat resolves there)
+        while (j + 1 < n and notes[j + 1].beat - notes[j].beat < ROLL_THRESHOLD - EPS
+               and not on_grid(notes[j + 1].beat, BEATS_PER_BAR)):
             j += 1
         if j > i:
             step = notes[i + 1].beat - notes[i].beat
@@ -80,6 +82,12 @@ def find_rolls(notes: list[Note]) -> list[Roll]:
             rolls.append(Roll(i, j - i + 1, notes[i].beat, step, notes[j].beat - notes[i].beat + last_step, mixed))
         i = j + 1
     return rolls
+
+
+def roll_clear_zone(start: float, last_note: float) -> tuple[float, float]:
+    bar_start = math.floor(start / BEATS_PER_BAR + EPS) * BEATS_PER_BAR
+    next_bar = (math.floor(last_note / BEATS_PER_BAR + EPS) + 1) * BEATS_PER_BAR
+    return max(start - ROLL_THRESHOLD + EPS, bar_start - EPS), min(last_note + ROLL_THRESHOLD - EPS, next_bar - EPS)
 
 
 def classify_velocity(notes: list[Note], roll: Roll) -> str:

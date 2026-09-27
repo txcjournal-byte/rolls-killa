@@ -91,8 +91,10 @@ std::vector<Roll> findRolls (const Pattern& p)
 
     for (int i = 0; i < count;)
     {
+        // A roll never continues over a bar line: a roll that lands on the downbeat resolves there.
         int j = i;
-        while (j + 1 < count && n[(size_t) j + 1].beat - n[(size_t) j].beat < kRollThreshold - kEps)
+        while (j + 1 < count && n[(size_t) j + 1].beat - n[(size_t) j].beat < kRollThreshold - kEps
+               && ! isOnGrid (n[(size_t) j + 1].beat, (double) kBeatsPerBar))
             ++j;
 
         if (j > i)
@@ -116,6 +118,17 @@ std::vector<Roll> findRolls (const Pattern& p)
     }
 
     return rolls;
+}
+
+void markRolls (Pattern& p)
+{
+    for (auto& n : p.notes)
+        n.rollId = -1;
+
+    const auto rolls = findRolls (p);
+    for (size_t r = 0; r < rolls.size(); ++r)
+        for (int k = rolls[r].first; k <= rolls[r].last(); ++k)
+            p.notes[(size_t) k].rollId = (int) r;
 }
 
 static std::vector<bool> rollMembership (const Pattern& p, const std::vector<Roll>& rolls)
@@ -230,6 +243,15 @@ std::vector<int> resampleCurve (const std::vector<int>& values, int newCount)
     return out;
 }
 
+std::pair<double, double> rollClearZone (double start, double lastNote) noexcept
+{
+    // Notes closer than a 1/16 would merge with the roll - but never reach over a bar line.
+    const auto barStart = std::floor (start / kBeatsPerBar + kEps) * kBeatsPerBar;
+    const auto nextBar = (std::floor (lastNote / kBeatsPerBar + kEps) + 1.0) * kBeatsPerBar;
+    return { std::max (start - kRollThreshold + kEps, barStart - kEps),
+             std::min (lastNote + kRollThreshold - kEps, nextBar - kEps) };
+}
+
 int insertRoll (Pattern& p, double start, const RollShape& shape)
 {
     std::vector<double> times;
@@ -246,8 +268,9 @@ int insertRoll (Pattern& p, double start, const RollShape& shape)
     if (times.size() < 2)
         return 0;
 
-    const auto zoneStart = start - kRollThreshold + kEps;
-    const auto zoneEnd = times.back() + kRollThreshold - kEps;
+    const auto zone = rollClearZone (start, times.back());
+    const auto zoneStart = zone.first;
+    const auto zoneEnd = zone.second;
 
     p.notes.erase (std::remove_if (p.notes.begin(), p.notes.end(),
                                    [&] (const Note& n) { return n.beat > zoneStart && n.beat < zoneEnd; }),

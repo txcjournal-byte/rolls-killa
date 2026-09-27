@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 namespace rk
@@ -32,6 +33,7 @@ struct Note
     // Bookkeeping (not stored in preset files)
     int srcTick = -1;       // tick of the source note this came from (edit key), -1 = generated
     int rateOverride = -1;  // on the first note of a roll: forced rate index, -1 = none
+    int rollId = -1;        // index of the roll this note belongs to (set by markRolls), -1 = plain hit
 };
 
 struct Pattern
@@ -61,6 +63,9 @@ struct Roll
 
 std::vector<Roll> findRolls (const Pattern& sortedPattern);
 
+/** Stores the roll membership in Note::rollId (kept even if timing is swung afterwards). */
+void markRolls (Pattern& sortedPattern);
+
 /** Most common spacing between non-roll notes (0.5 for a 1/8 grid, 0.25 for 1/16, ...). */
 double detectBaseGrid (const Pattern& sortedPattern);
 
@@ -86,6 +91,9 @@ struct RollShape
     std::vector<int> vels;     // per note (resampled if sizes differ)
     std::vector<int> pitches;  // per note (resampled if sizes differ)
 };
+
+/** Open interval of notes that must be cleared around a roll (first note 'start', last note 'lastNote'). */
+std::pair<double, double> rollClearZone (double start, double lastNote) noexcept;
 
 /** Inserts a roll at 'start', removing whatever notes it would collide with. Returns the note count. */
 int insertRoll (Pattern& p, double start, const RollShape& shape);

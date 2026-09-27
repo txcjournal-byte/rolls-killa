@@ -127,12 +127,12 @@ int main (int argc, char* argv[])
                                                                                   + " - " + preset.name) + ".wav");
         file.deleteFile();
         juce::WavAudioFormat wav;
-        if (auto stream = file.createOutputStream())
-            if (auto writer = std::unique_ptr<juce::AudioFormatWriter> (wav.createWriterFor (stream.get(), sr, 2, 24, {}, 0)))
-            {
-                stream.release();
+        std::unique_ptr<juce::OutputStream> stream (file.createOutputStream());
+        if (stream != nullptr)
+            if (auto writer = wav.createWriterFor (stream, juce::AudioFormatWriterOptions {}.withSampleRate (sr)
+                                                                                        .withNumChannels (2)
+                                                                                        .withBitsPerSample (24)))
                 writer->writeFromAudioSampleBuffer (out, 0, totalSamples);
-            }
     }
 
     proc.releaseResources();

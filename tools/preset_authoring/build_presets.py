@@ -37,7 +37,7 @@ ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, os.path.join(HERE, ".."))
 
 from rollkit import (BEATS_PER_BAR, EPS, RATE_BY_DIVISION, ROLL_STEPS, ROLL_THRESHOLD,  # noqa: E402
-                     Note, Stats, find_rolls, on_grid, rate_index)
+                     Note, Stats, find_rolls, on_grid, rate_index, roll_clear_zone)
 
 CATEGORIES = ["PRIMITIVUS", "LIBER TRAP", "TRINITAS", "VOMITORIUM", "BLAST RITUAL", "AURA FARM",
               "DELIRIUM", "NECRODRILL", "MOTOR MORTIS", "SPASMUS", "REQUIEM", "MANIA"]
@@ -100,8 +100,7 @@ def render(p: P) -> list[Note]:
             for _ in range(count):
                 times.append(t)
                 t += ROLL_STEPS[RATE_BY_DIVISION[div]]
-        zone_start = start - ROLL_THRESHOLD + EPS
-        zone_end = times[-1] + ROLL_THRESHOLD - EPS
+        zone_start, zone_end = roll_clear_zone(start, times[-1])
         notes = [n for n in notes if not (zone_start < n.beat < zone_end)]
         vels = _curve(r.vel, len(times), p.vel)
         pitches = _curve(r.pitch, len(times), 0)

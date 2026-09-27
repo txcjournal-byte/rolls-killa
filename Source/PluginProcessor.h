@@ -2,6 +2,8 @@
 
 #include "Parameters.h"
 #include "engine/HatSampler.h"
+#include "engine/MidiExport.h"
+#include "engine/UndoHistory.h"
 #include "engine/LockFreeSlot.h"
 #include "engine/PatternPlayer.h"
 #include "engine/RollLibrary.h"
@@ -50,6 +52,36 @@ public:
     /** Rebuilds the pattern from the current parameters right away (message thread). */
     void rebuildPattern (bool force = false);
 
+    // Presets / KILL
+    void loadPreset (int index);                    // resets KILL seed and edits
+    void stepPreset (int delta);                    // prev/next inside the whole library
+    int getPresetIndex() const;
+    void kill();                                    // new variation seed
+    void resetVariation();                          // back to the original preset
+    uint32_t getSeed() const;
+
+    // Lock bars (bit per bar) and visualizer edits
+    uint32_t getLockedBars() const;
+    void setBarLocked (int bar, bool locked);
+    rk::NoteEdits getEdits() const;
+    void setNoteEdit (int tick, const rk::NoteEdit& edit);
+    void clearEdits();
+
+    // Undo / redo (snapshots of the whole state)
+    bool undo();
+    bool redo();
+    bool canUndo() const noexcept { return history.canUndo(); }
+    bool canRedo() const noexcept { return history.canRedo(); }
+
+    // Sampler
+    juce::String loadCustomSample (const juce::File& file);
+
+    // MIDI out of the plugin
+    rk::MidiExportOptions getMidiExportOptions() const;
+    juce::File createDragMidiFile();
+    bool exportMidi (const juce::File& file);
+    int saveUserPreset (const juce::String& name);
+
     void setPreviewEnabled (bool shouldPreview) noexcept;
     bool isPreviewEnabled() const noexcept { return previewEnabled.load(); }
     bool isHostPlaying() const noexcept { return hostPlaying.load(); }
@@ -64,6 +96,9 @@ private:
     void parameterChanged (const juce::String& parameterID, float newValue) override;
     void timerCallback() override;
     rk::ModelSettings readModelSettings() const;
+    void setParam (const char* id, float plainValue);
+    void markStateChanged();
+    void applyRestoredState();
     rk::HatSamplerSettings readSamplerSettings() const noexcept;
 
     // Declaration order matters: the parameter layout needs the sampler's hat names.
@@ -79,6 +114,9 @@ private:
     std::atomic<bool> previewRestart { false };
     std::atomic<bool> hostPlaying { false };
     std::atomic<int> patternVersion { 0 };
+    std::atomic<bool> stateChanged { false };
+    std::atomic<juce::uint32> lastChangeMs { 0 };
+    rk::UndoHistory history;
     double previewPpq = 0.0;
     double currentSampleRate = 44100.0;
 

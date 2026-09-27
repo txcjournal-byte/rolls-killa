@@ -57,6 +57,9 @@ set(ROLLSKILLA_ENGINE_SOURCES
     Source/engine/HatSampler.cpp
     Source/engine/PatternPlayer.cpp
     Source/engine/RollModel.cpp
+    Source/engine/PatternShaper.cpp
+    Source/engine/VariationEngine.cpp
+    Source/engine/MidiExport.cpp
 )
 
 set(ROLLSKILLA_COMMON_DEFINITIONS
@@ -140,6 +143,8 @@ if(ROLLSKILLA_BUILD_TESTS)
         Tests/LibraryTests.cpp
         Tests/SamplerTests.cpp
         Tests/PlayerTests.cpp
+        Tests/ShaperTests.cpp
+        Tests/MidiExportTests.cpp
         ${ROLLSKILLA_ENGINE_SOURCES}
     )
 
@@ -172,7 +177,8 @@ if(ROLLSKILLA_BUILD_TESTS)
     # Links the plugin's shared code directly (JUCE modules are already compiled into it).
     target_include_directories(RollsKillaRender PRIVATE Source "${juce_SOURCE_DIR}/modules"
         "$<TARGET_PROPERTY:RollsKilla,INCLUDE_DIRECTORIES>")
-    target_compile_definitions(RollsKillaRender PRIVATE "$<TARGET_PROPERTY:RollsKilla,COMPILE_DEFINITIONS>")
+    target_compile_definitions(RollsKillaRender PRIVATE
+        "$<LIST:FILTER,$<TARGET_PROPERTY:RollsKilla,COMPILE_DEFINITIONS>,EXCLUDE,^JUCE_STANDALONE_APPLICATION>")
     target_link_libraries(RollsKillaRender PRIVATE RollsKilla juce::juce_recommended_config_flags)
     add_test(NAME RollsKillaRenderCheck COMMAND RollsKillaRender render-check --check)
 endif()
