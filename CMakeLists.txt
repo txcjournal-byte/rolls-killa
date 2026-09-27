@@ -49,6 +49,10 @@ juce_add_binary_data(RollsKillaSampleData
 # Engine sources (no GUI) - shared by the plugin and the test runner
 # ---------------------------------------------------------------------------
 set(ROLLSKILLA_ENGINE_SOURCES
+    Source/engine/Pattern.cpp
+    Source/engine/CategoryProfile.cpp
+    Source/engine/RollLibrary.cpp
+    Source/engine/PresetValidator.cpp
 )
 
 set(ROLLSKILLA_COMMON_DEFINITIONS
@@ -128,6 +132,7 @@ if(ROLLSKILLA_BUILD_TESTS)
 
     target_sources(RollsKillaTests PRIVATE
         Tests/TestMain.cpp
+        Tests/LibraryTests.cpp
         ${ROLLSKILLA_ENGINE_SOURCES}
     )
 
