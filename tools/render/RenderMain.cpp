@@ -3,6 +3,8 @@
 //
 //   RollsKillaRender <outDir> [--loops N] [--preset "Name"] [--check]
 
+#include "PluginEditor.h"
+#include "ui/Sigils.h"
 #include "PluginProcessor.h"
 
 #include <juce_audio_formats/juce_audio_formats.h>
@@ -44,6 +46,7 @@ int main (int argc, char* argv[])
     const auto loops = args.contains ("--loops") ? args[args.indexOf ("--loops") + 1].getIntValue() : 2;
     const auto only = args.contains ("--preset") ? args[args.indexOf ("--preset") + 1] : juce::String();
     const auto checkOnly = args.contains ("--check");
+    const auto screenshot = args.contains ("--screenshot");
     outDir.createDirectory();
 
     const double sr = 44100.0;
@@ -58,6 +61,63 @@ int main (int argc, char* argv[])
     proc.prepareToPlay (sr, block);
 
     auto& lib = proc.getLibrary();
+
+    if (screenshot)
+    {
+        // Renders the editor (and the preset browser) to PNG files in outDir.
+        if (only.isNotEmpty())
+            for (int i = 0; i < lib.getNumPresets(); ++i)
+                if (lib.getPreset (i).name.equalsIgnoreCase (only))
+                    proc.loadPreset (i);
+
+        std::unique_ptr<juce::AudioProcessorEditor> editor (proc.createEditor());
+        editor->setVisible (true);
+
+        // advance the playhead a bit so the visualizer shows it
+        playHead.bpm = proc.getModel().getPreset().bpmHint;
+        juce::AudioBuffer<float> buf (2, block);
+        juce::MidiBuffer midi;
+        for (int b = 0; b < 60; ++b)
+        {
+            playHead.ppq = b * block * playHead.bpm / 60.0 / sr;
+            proc.processBlock (buf, midi);
+        }
+
+        auto save = [&] (const juce::String& name, float scale)
+        {
+            const auto img = editor->createComponentSnapshot (editor->getLocalBounds(), true, scale);
+            const auto file = outDir.getChildFile (name);
+            file.deleteFile();
+            juce::FileOutputStream os (file);
+            juce::PNGImageFormat().writeImageToStream (img, os);
+            std::cout << "wrote " << file.getFullPathName() << std::endl;
+        };
+
+        save ("ui_main.png", 2.0f);
+
+        {
+            const auto logo = rk::ui::renderLogo (60, 5.0f);
+            juce::FileOutputStream os (outDir.getChildFile ("logo.png"));
+            os.setPosition (0);
+            os.truncate();
+            juce::PNGImageFormat().writeImageToStream (logo, os);
+        }
+
+        if (auto* browser = editor->findChildWithID ("browser"))
+            juce::ignoreUnused (browser);
+
+        for (auto* c : editor->getChildren())
+            for (auto* cc : c->getChildren())
+                if (auto* b = dynamic_cast<rk::ui::PresetBrowser*> (cc))
+                {
+                    b->open (proc.getModel().getPreset().category);
+                    save ("ui_browser.png", 2.0f);
+                }
+
+        editor.reset();
+        proc.setPlayHead (nullptr);
+        return 0;
+    }
     auto* presetParam = proc.getState().getParameter (rk::params::preset);
 
     for (int i = 0; i < lib.getNumFactoryPresets(); ++i)

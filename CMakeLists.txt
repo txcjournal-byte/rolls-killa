@@ -109,6 +109,12 @@ target_sources(RollsKilla PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/Parameters.cpp
+    Source/ui/KillaLookAndFeel.cpp
+    Source/ui/RollVisualizer.cpp
+    Source/ui/PresetBar.cpp
+    Source/ui/PresetBrowser.cpp
+    Source/ui/Sigils.cpp
+    Source/ui/Widgets.cpp
     ${ROLLSKILLA_ENGINE_SOURCES}
 )
 
