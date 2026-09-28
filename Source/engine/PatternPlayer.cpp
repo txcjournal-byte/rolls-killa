@@ -66,13 +66,20 @@ int PatternPlayer::process (const PlaybackPattern* pattern, const TransportState
     const auto end = start + numSamples * beatsPerSample;
     auto toOffset = [&] (double ppq) { return std::clamp ((int) std::floor ((ppq - start) / beatsPerSample + 1.0e-6), 0, numSamples - 1); };
 
-    // Position jump (loop, locate, tempo map weirdness): release everything first.
-    const auto tolerance = std::max (1.0e-3, 2.0 * beatsPerSample);
-    if (wasPlaying && std::abs (start - expectedPpq) > tolerance)
+    // Hosts do not always continue exactly where the previous block ended: after a tempo change
+    // the position can be a little ahead or behind. Small differences are treated as continuous
+    // playback - we carry on from where we stopped, so no note in the gap is dropped and nothing
+    // is played twice. Only a real jump (loop, locate) restarts from the host position.
+    const auto blockBeats = end - start;
+    const auto continuityWindow = std::max (0.0625, 2.0 * blockBeats);
+    const auto continuous = wasPlaying && std::abs (start - expectedPpq) <= continuityWindow;
+
+    if (wasPlaying && ! continuous)
         count = flushOffs (0, out, count);
 
+    const auto scanFrom = continuous ? expectedPpq : start;
     wasPlaying = true;
-    expectedPpq = end;
+    expectedPpq = std::max (end, scanFrom);
 
     // Pending note-offs that fall into this block
     for (int i = 0; i < numPending;)
@@ -91,14 +98,14 @@ int PatternPlayer::process (const PlaybackPattern* pattern, const TransportState
     if (pattern != nullptr && pattern->lengthBeats > 0.0 && ! pattern->events.empty())
     {
         const auto len = pattern->lengthBeats;
-        auto cycleStart = std::floor (start / len) * len;
+        auto cycleStart = std::floor (scanFrom / len) * len;
 
         for (; cycleStart < end; cycleStart += len)
         {
             for (const auto& e : pattern->events)
             {
                 const auto on = cycleStart + e.beat;
-                if (on < start - 1.0e-9)
+                if (on < scanFrom - 1.0e-9)
                     continue;
                 if (on >= end)
                     break;

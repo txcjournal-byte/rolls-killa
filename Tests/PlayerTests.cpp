@@ -131,6 +131,75 @@ public:
             expectWithinAbsoluteError (player.getDisplayBeat(), 1.0 + 29696.0 / 24000.0, 0.01);
         }
 
+        beginTest ("tempo changes with host position jitter: every note exactly once");
+        {
+            // Hosts recompute the position when the tempo changes; the next block can start a hair
+            // before or after where the previous one ended. Notes on the block border must not be
+            // lost or doubled.
+            PatternPlayer player;
+            player.prepare (sr);
+            std::array<PlayerEvent, PatternPlayer::kMaxEventsPerBlock> ev;
+            juce::Random rng (7);
+            double ppq = 0.0;
+            int ons = 0;
+            const int block = 480;
+            const double bpms[] { 140.0, 110.0, 90.0, 75.0, 140.0 };
+            double hostBpm = bpms[0];
+            for (int b = 0; b < 2000; ++b)
+            {
+                // the host reports the new tempo right away, but still advances this block at the
+                // old one (tempo change inside the block) - plus a little rounding jitter
+                const auto reportedBpm = bpms[(b / 30) % 5];
+                const auto jitter = (rng.nextDouble() - 0.5) * 2.0e-3;
+                TransportState t { true, std::max (0.0, ppq + jitter), reportedBpm };
+                const auto count = player.process (&pat, t, block, ev);
+                for (int i = 0; i < count; ++i)
+                    ons += ev[(size_t) i].vel > 0 ? 1 : 0;
+                ppq += block * hostBpm / 60.0 / sr;
+                hostBpm = reportedBpm;
+            }
+            // expected: every pattern event whose position lies in [0, ppq_end)
+            int expected = 0;
+            for (double loop = 0.0; loop < ppq; loop += pat.lengthBeats)
+                for (const auto& e : pat.events)
+                    expected += loop + e.beat < ppq - 0.01 ? 1 : 0;
+            expectWithinAbsoluteError (ons, expected, 1);
+        }
+
+        beginTest ("note in the small gap after a tempo change is not dropped (or doubled)");
+        {
+            PatternPlayer player;
+            player.prepare (sr);
+            std::array<PlayerEvent, PatternPlayer::kMaxEventsPerBlock> ev;
+            auto onsAt = [&] (double ppq, double bpm, int samples)
+            {
+                TransportState t { true, ppq, bpm };
+                const auto count = player.process (&pat, t, samples, ev);
+                int ons = 0;
+                for (int i = 0; i < count; ++i)
+                    ons += (ev[(size_t) i].vel > 0 && ev[(size_t) i].note == 60) ? 1 : 0;
+                return ons;
+            };
+            // block ends at 0.99 (by the tempo the host reported) ...
+            const auto samplesTo099 = (int) std::lround (0.09 / (120.0 / 60.0 / sr));
+            int total = onsAt (0.9, 120.0, samplesTo099);
+            // ... but the host actually moved on to 1.01: the note at 1.0 lies in the gap
+            total += onsAt (1.01, 90.0, 480);
+            expectEquals (total, 1, "note at beat 1.0 plays exactly once");
+
+            // and the other way round: host steps back a little -> no double note
+            PatternPlayer p2;
+            p2.prepare (sr);
+            TransportState a { true, 0.95, 120.0 };
+            int n = 0;
+            auto c = p2.process (&pat, a, (int) std::lround (0.07 / (120.0 / 60.0 / sr)), ev);   // plays 1.0
+            for (int i = 0; i < c; ++i) n += ev[(size_t) i].vel > 0 ? 1 : 0;
+            TransportState b { true, 0.995, 90.0 };                                              // back to 0.995
+            c = p2.process (&pat, b, 480, ev);
+            for (int i = 0; i < c; ++i) n += ev[(size_t) i].vel > 0 ? 1 : 0;
+            expectEquals (n, 1, "no double hit when the host steps back slightly");
+        }
+
         beginTest ("tempo change follows the host position");
         {
             PatternPlayer player;
