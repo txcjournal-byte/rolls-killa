@@ -305,7 +305,17 @@ int main (int argc, char* argv[])
         expectTrue (proc2.getSeed() == proc.getSeed() && proc2.getSeed() != 0, "KILL seed restored");
         expectTrue (proc2.getLockedBars() == 2u, "bar locks restored");
         expectTrue (proc2.getEdits().size() == 1 && proc2.getEdits().begin()->second.muted, "visualizer edits restored");
-        expectTrue (proc2.getModel().getPattern().notes.front().muted, "muted note stays muted");
+        {
+            // check the edited note itself (the knobs may have put a roll in front of it)
+            bool found = false, muted = false;
+            for (const auto& n : proc2.getModel().getEditablePattern().notes)
+                if (n.srcTick == firstTick)
+                {
+                    found = true;
+                    muted = n.muted;
+                }
+            expectTrue (found && muted, "muted note stays muted");
+        }
 
         // ---- undo / redo ------------------------------------------------------
         {
