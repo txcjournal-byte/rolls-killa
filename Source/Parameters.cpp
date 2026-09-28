@@ -32,6 +32,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createLayout (const juce::St
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { choke, 1 }, "Choke", true));
     layout.add (std::make_unique<AudioParameterFloat> (ParameterID { volume, 1 }, "Volume", NormalisableRange<float> (-48.0f, 6.0f, 0.1f, 2.0f), 0.0f,
                                                        AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return String (v, 1) + " dB"; })));
+    layout.add (std::make_unique<AudioParameterChoice> (ParameterID { playMode, 1 }, "Play Mode", playModeChoices, kPlayModeMidi));
     return layout;
 }
 

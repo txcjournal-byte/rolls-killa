@@ -18,6 +18,7 @@ RollsKillaProcessor::RollsKillaProcessor()
     raw.decay = apvts.getRawParameterValue (params::decay);
     raw.choke = apvts.getRawParameterValue (params::choke);
     raw.volume = apvts.getRawParameterValue (params::volume);
+    raw.playMode = apvts.getRawParameterValue (params::playMode);
 
     rebuildPattern (true);
     history.reset (apvts.copyState());
@@ -376,17 +377,93 @@ void RollsKillaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         previewPpq += numSamples * transport.bpm / 60.0 / currentSampleRate;
     }
 
-    const auto numEvents = player.process (pattern, transport, numSamples, events);
+    // ---- MIDI gate: in MIDI mode the pattern only plays while a note is held on the channel
+    //      (FL: a long note in the piano roll; a muted channel sends no notes -> silence)
+    const auto midiGate = raw.playMode->load() < 0.5f;
+    const auto previewing = ! hostIsPlaying && transport.playing;
+
+    if (! hostIsPlaying && numHeldNotes > 0)
+    {
+        heldNotes.fill (false);
+        numHeldNotes = 0;
+    }
+
+    auto updateGate = [this] (const juce::MidiMessage& m)
+    {
+        if (m.isNoteOn())
+        {
+            if (! heldNotes[(size_t) m.getNoteNumber()]) { heldNotes[(size_t) m.getNoteNumber()] = true; ++numHeldNotes; }
+        }
+        else if (m.isNoteOff())
+        {
+            if (heldNotes[(size_t) m.getNoteNumber()]) { heldNotes[(size_t) m.getNoteNumber()] = false; --numHeldNotes; }
+        }
+        else if (m.isAllNotesOff() || m.isAllSoundOff())
+        {
+            heldNotes.fill (false);
+            numHeldNotes = 0;
+        }
+    };
+
+    int numEvents = 0;
+
+    if (midiGate && hostIsPlaying)
+    {
+        // run the player in segments split at gate changes (sample accurate, no allocation)
+        const auto beatsPerSample = transport.bpm / 60.0 / currentSampleRate;
+        int segStart = 0;
+
+        auto runSegment = [&] (int segEnd)
+        {
+            segEnd = juce::jlimit (0, numSamples, segEnd);
+            if (segEnd <= segStart)
+                return;
+
+            auto t = transport;
+            t.ppq = transport.ppq + segStart * beatsPerSample;
+            t.playing = numHeldNotes > 0;
+            const auto n = player.process (pattern, t, segEnd - segStart, segmentEvents);
+
+            for (int i = 0; i < n && numEvents < (int) events.size(); ++i)
+            {
+                auto e = segmentEvents[(size_t) i];
+                e.sampleOffset += segStart;
+                events[(size_t) numEvents++] = e;
+            }
+            segStart = segEnd;
+        };
+
+        for (const auto meta : midi)
+        {
+            const auto m = meta.getMessage();
+            if (m.isNoteOnOrOff() || m.isAllNotesOff() || m.isAllSoundOff())
+            {
+                runSegment (meta.samplePosition);
+                updateGate (m);
+            }
+        }
+        runSegment (numSamples);
+    }
+    else
+    {
+        for (const auto meta : midi)
+            updateGate (meta.getMessage());
+        numEvents = player.process (pattern, transport, numSamples, events);
+    }
+
+    waitingForMidi.store (midiGate && hostIsPlaying && numHeldNotes == 0, std::memory_order_relaxed);
     patternSlot.release();
 
-    // ---- live input: incoming note-ons play the sampler too (copied, no allocation)
+    // ---- live input (Host mode only): incoming note-ons play the sampler directly.
+    //      In MIDI mode the notes are the gate, not sounds.
     int numInput = 0;
-    for (const auto meta : midi)
-    {
-        const auto m = meta.getMessage();
-        if (m.isNoteOn() && numInput < (int) inputNotes.size())
-            inputNotes[(size_t) numInput++] = { meta.samplePosition, m.getNoteNumber(), (int) m.getVelocity() };
-    }
+    if (! midiGate || previewing)
+        for (const auto meta : midi)
+        {
+            const auto m = meta.getMessage();
+            if (m.isNoteOn() && numInput < (int) inputNotes.size())
+                inputNotes[(size_t) numInput++] = { meta.samplePosition, m.getNoteNumber(), (int) m.getVelocity() };
+        }
 
     midi.clear();   // output = generated pattern only (keeps the host's preallocated storage)
 

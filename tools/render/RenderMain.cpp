@@ -62,6 +62,10 @@ int main (int argc, char* argv[])
 
     auto& lib = proc.getLibrary();
 
+    // renders and checks run the pattern from the transport (no notes on the channel)
+    if (auto* pm = proc.getState().getParameter (rk::params::playMode))
+        pm->setValueNotifyingHost (pm->convertTo0to1 (1.0f));
+
     if (args.contains ("--demo"))
     {
         // One listening file: calmest (1) and craziest (8) preset of every category, one loop each.
@@ -315,6 +319,42 @@ int main (int argc, char* argv[])
             expectTrue (samePattern (original, p3.getModel().getPattern()), "undo restores the pattern before KILL");
             p3.redo();
             expectTrue (samePattern (killed, p3.getModel().getPattern()), "redo brings the KILL back");
+        }
+
+        // ---- MIDI play mode: silent without a note, plays while a note is held --
+        {
+            std::unique_ptr<juce::AudioProcessor> gateBase (createPluginFilter());
+            auto& gp = dynamic_cast<RollsKillaProcessor&> (*gateBase);
+            FakePlayHead gph;
+            gph.bpm = 140.0;
+            gp.setPlayHead (&gph);
+            gp.setPlayConfigDetails (0, 2, sr, block);
+            gp.prepareToPlay (sr, block);
+            juce::AudioBuffer<float> buf (2, block);
+
+            auto runBlocks = [&] (int blocks, bool holdNote, int& ons, float& peak)
+            {
+                for (int b = 0; b < blocks; ++b)
+                {
+                    juce::MidiBuffer midi;
+                    if (holdNote && b == 0)
+                        midi.addEvent (juce::MidiMessage::noteOn (1, 60, (juce::uint8) 100), 0);
+                    gp.processBlock (buf, midi);
+                    gph.ppq += block * gph.bpm / 60.0 / sr;
+                    for (const auto m : midi)
+                        ons += m.getMessage().isNoteOn() ? 1 : 0;
+                    peak = std::max (peak, buf.getMagnitude (0, block));
+                }
+            };
+
+            int onsSilent = 0, onsHeld = 0;
+            float peakSilent = 0.0f, peakHeld = 0.0f;
+            runBlocks (200, false, onsSilent, peakSilent);
+            runBlocks (200, true, onsHeld, peakHeld);
+            expectTrue (onsSilent == 0 && peakSilent < 1.0e-6f && gp.isWaitingForMidi() == false,
+                        "MIDI mode: host playing, no note -> silent");
+            expectTrue (onsHeld > 0 && peakHeld > 0.05f, "MIDI mode: note held -> pattern plays");
+            gp.setPlayHead (nullptr);
         }
 
         // ---- performance ------------------------------------------------------

@@ -43,6 +43,7 @@ private:
 
     int shownVersion = -1;
     double lastPlayhead = -1.0;
+    bool lastWaiting = false;
     int hoverNote = -1, hoverLock = -1;
 
     // drag state

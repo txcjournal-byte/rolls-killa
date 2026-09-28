@@ -68,7 +68,8 @@ zástupné closed hats (stejná jména, podobná délka a jas). Vlastní WAV lze
 | **KILL** | nová variace presetu v pravidlech kategorie; pravý klik = zpět na originál presetu |
 | **DRAG MIDI** | chyť a přetáhni do DAW (FL: do Playlistu nebo Piano rollu) |
 | **EXPORT .MID** | uloží pattern jako MIDI soubor |
-| **PREVIEW** | přehrávání v BPM presetu, když DAW stojí |
+| **PLAY: MIDI / HOST** | **MIDI** (výchozí): hraje jen když na kanálu drží nota – ve FL dej do Piano rollu kanálu Rolls Killa jednu dlouhou notu přes celý pattern; ztlumený kanál je potichu. **HOST**: hraje vždy, když běží Play v DAW |
+| **▶ (Preview)** | přehrávání v BPM presetu, když DAW stojí |
 | **Undo/Redo** | posledních 20 změn (Ctrl+Z, Ctrl+Shift+Z) |
 
 Všechno (preset, knoby, KILL seed, zámky, úpravy v okénku, sampler) se ukládá do projektu DAW.

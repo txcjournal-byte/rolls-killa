@@ -62,8 +62,11 @@ void RollVisualizer::timerCallback()
     const auto version = processor.getPatternVersion();
     const auto playhead = processor.getPlayheadBeat();
 
-    if (version != shownVersion || std::abs (playhead - lastPlayhead) > 1.0e-9)
+    const auto waiting = processor.isWaitingForMidi();
+
+    if (version != shownVersion || std::abs (playhead - lastPlayhead) > 1.0e-9 || waiting != lastWaiting)
     {
+        lastWaiting = waiting;
         shownVersion = version;
         lastPlayhead = playhead;
         repaint();
@@ -225,6 +228,22 @@ void RollVisualizer::paint (juce::Graphics& g)
         juce::Path tri;
         tri.addTriangle (x - 6.0f, area.getY() - 10.0f, x + 6.0f, area.getY() - 10.0f, x, area.getY() - 3.0f);
         g.fillPath (tri);
+    }
+
+    // MIDI play mode, host running, no note held: explain the silence
+    if (processor.isWaitingForMidi())
+    {
+        auto box = area.withSizeKeepingCentre (juce::jmin (area.getWidth() - 20.0f, 560.0f), 46.0f);
+        g.setColour (colours::background.withAlpha (0.88f));
+        g.fillRoundedRectangle (box, 6.0f);
+        g.setColour (colours::accent.withAlpha (0.8f));
+        g.drawRoundedRectangle (box, 6.0f, 1.0f);
+        g.setColour (colours::text);
+        g.setFont (labelFont (12.0f));
+        g.drawText ("PLAY: MIDI - WAITING FOR A NOTE ON THIS CHANNEL", box.removeFromTop (26.0f), juce::Justification::centredBottom, false);
+        g.setColour (colours::textDim);
+        g.setFont (uiFont (11.5f, false));
+        g.drawText ("put one long note in the piano roll, or switch PLAY to HOST", box, juce::Justification::centredTop, false);
     }
 
     // hover info

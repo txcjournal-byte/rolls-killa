@@ -78,6 +78,7 @@ RollsKillaEditor::RollsKillaEditor (RollsKillaProcessor& p)
       proc (p),
       visualizer (p),
       presetBar (p),
+      playMode (p.getState(), params::playMode, { "MIDI", "HOST" }),
       rollSpeed (p.getState(), params::rollSpeed, params::rollSpeedChoices),
       velMode (p.getState(), params::velMode, params::velModeChoices),
       density (p.getState(), params::density, "DENSITY"),
@@ -113,8 +114,10 @@ RollsKillaEditor::RollsKillaEditor (RollsKillaProcessor& p)
     redoButton.setTooltip ("Redo (Ctrl+Shift+Z)");
     undoButton.onClick = [this] { proc.undo(); updateStatus(); };
     redoButton.onClick = [this] { proc.redo(); updateStatus(); };
-    previewButton.label = "PREVIEW";
-    previewButton.setTooltip ("Play the pattern at the preset's tempo while the host is stopped");
+    previewButton.setTooltip ("Preview: play the pattern at the preset's tempo while the host is stopped");
+    content.addAndMakeVisible (playMode);
+    playMode.setTooltip ("MIDI: plays only while a note is held on this channel (FL: one long note in the piano roll; "
+                         "a muted channel stays silent). HOST: plays whenever the host plays.");
     previewButton.onClick = [this] { proc.setPreviewEnabled (! proc.isPreviewEnabled()); updateStatus(); };
 
     for (auto* c : std::initializer_list<juce::Component*> { &rollSpeed, &velMode, &density, &groove, &pitchRamp, &swing, &variation,
@@ -187,10 +190,12 @@ void RollsKillaEditor::layout()
     presetBar.setBounds (kPresetBar);
 
     auto t = kTransport.reduced (8, 7);
-    undoButton.setBounds (t.removeFromLeft (38));
+    undoButton.setBounds (t.removeFromLeft (34));
+    t.removeFromLeft (4);
+    redoButton.setBounds (t.removeFromLeft (34));
+    t.removeFromLeft (4);
+    playMode.setBounds (t.removeFromLeft (80).reduced (0, 3));
     t.removeFromLeft (6);
-    redoButton.setBounds (t.removeFromLeft (38));
-    t.removeFromLeft (8);
     previewButton.setBounds (t);
 
     const auto c = kControls;
@@ -228,7 +233,6 @@ void RollsKillaEditor::updateStatus()
     const auto previewing = proc.isPreviewEnabled() && ! hostPlaying;
     previewButton.setToggleState (previewing, juce::dontSendNotification);
     previewButton.setIcon (previewing ? Icon::stop : Icon::play);
-    previewButton.label = hostPlaying ? "HOST SYNC" : previewing ? "STOP" : "PREVIEW";
     previewButton.setEnabled (! hostPlaying);
     previewButton.repaint();
 

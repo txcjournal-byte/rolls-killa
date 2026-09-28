@@ -87,6 +87,8 @@ public:
     void setPreviewEnabled (bool shouldPreview) noexcept;
     bool isPreviewEnabled() const noexcept { return previewEnabled.load(); }
     bool isHostPlaying() const noexcept { return hostPlaying.load(); }
+    /** MIDI play mode, host playing, but no note held on the channel -> silent on purpose. */
+    bool isWaitingForMidi() const noexcept { return waitingForMidi.load(); }
     /** Position inside the pattern in beats, -1 when not running. */
     double getPlayheadBeat() const noexcept { return player.getDisplayBeat(); }
     /** Increments every time a new pattern is published (UI refresh). */
@@ -115,6 +117,10 @@ private:
     std::atomic<bool> previewEnabled { false };
     std::atomic<bool> previewRestart { false };
     std::atomic<bool> hostPlaying { false };
+    std::atomic<bool> waitingForMidi { false };
+    std::array<bool, 128> heldNotes {};
+    int numHeldNotes = 0;
+    std::array<rk::PlayerEvent, rk::PatternPlayer::kMaxEventsPerBlock> segmentEvents {};
     std::atomic<int> patternVersion { 0 };
     std::atomic<bool> stateChanged { false };
     std::atomic<juce::uint32> lastChangeMs { 0 };
@@ -132,6 +138,7 @@ private:
         std::atomic<float>* decay = nullptr;
         std::atomic<float>* choke = nullptr;
         std::atomic<float>* volume = nullptr;
+        std::atomic<float>* playMode = nullptr;
     } raw;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RollsKillaProcessor)

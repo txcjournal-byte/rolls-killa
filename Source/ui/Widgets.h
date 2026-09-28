@@ -54,7 +54,7 @@ private:
 
 //==============================================================================
 /** Row of mutually exclusive buttons bound to a choice parameter. */
-class SegmentedChoice : public juce::Component
+class SegmentedChoice : public juce::Component, public juce::SettableTooltipClient
 {
 public:
     SegmentedChoice (juce::AudioProcessorValueTreeState& state, const juce::String& paramId, const juce::StringArray& labels);

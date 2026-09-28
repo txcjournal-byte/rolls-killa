@@ -21,6 +21,7 @@ inline constexpr const char* tune      = "tune";
 inline constexpr const char* decay     = "decay";
 inline constexpr const char* choke     = "choke";
 inline constexpr const char* volume    = "volume";
+inline constexpr const char* playMode  = "playMode";
 
 inline constexpr int kMaxPresetIndex = 511;
 inline constexpr int kMaxSeed = 99999;
@@ -28,6 +29,9 @@ inline constexpr int kMaxSeed = 99999;
 inline const juce::StringArray rollSpeedChoices { "Slower", "Original", "Faster" };
 inline const juce::StringArray velModeChoices { "Original", "Flat", "Ramp Up", "Ramp Down" };
 inline const juce::StringArray barsChoices { "1", "2", "4", "8" };
+// MIDI = plays only while a note is held on the channel (host-synced); Host = plays whenever the host plays
+inline const juce::StringArray playModeChoices { "MIDI", "Host" };
+inline constexpr int kPlayModeMidi = 0;
 
 inline int barsFromChoice (int choice) { return 1 << juce::jlimit (0, 3, choice); }
 inline int choiceFromBars (int numBars) { return numBars >= 8 ? 3 : numBars >= 4 ? 2 : numBars >= 2 ? 1 : 0; }

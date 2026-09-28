@@ -51,6 +51,7 @@ private:
     rk::ui::IconButton undoButton { "Undo", rk::ui::Icon::undo }, redoButton { "Redo", rk::ui::Icon::redo };
     rk::ui::IconButton previewButton { "Preview", rk::ui::Icon::play };
 
+    rk::ui::SegmentedChoice playMode;
     rk::ui::SegmentedChoice rollSpeed, velMode;
     rk::ui::Knob density, groove, pitchRamp, swing, variation;
 
