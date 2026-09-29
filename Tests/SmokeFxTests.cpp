@@ -8,6 +8,12 @@
 namespace rk
 {
 
+namespace
+{
+    constexpr double kSmokeSr = 44100.0;
+    constexpr int kSmokeLen = 44100 * 2;
+}
+
 class SmokeFxTests : public juce::UnitTest
 {
 public:
@@ -15,15 +21,15 @@ public:
 
     void runTest() override
     {
-        constexpr double sr = 44100.0;
-        constexpr int n = 44100 * 2;
+        const auto sr = kSmokeSr;
+        const auto n = kSmokeLen;
         const auto beatsPerSample = 140.0 / 60.0 / sr;
 
         auto hats = []
         {
-            std::vector<float> v (n, 0.0f);
-            for (int i = 0; i < n; i += 4725)          // 1/8 at 140 BPM
-                for (int k = 0; k < 2000 && i + k < n; ++k)
+            std::vector<float> v (kSmokeLen, 0.0f);
+            for (int i = 0; i < kSmokeLen; i += 4725)          // 1/8 at 140 BPM
+                for (int k = 0; k < 2000 && i + k < kSmokeLen; ++k)
                     v[(size_t) (i + k)] = 0.8f * std::exp (-k / 300.0f) * std::sin (k * 1.7f);
             return v;
         };
