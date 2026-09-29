@@ -413,6 +413,47 @@ int main (int argc, char* argv[])
             expectTrue (hp.getKillHistoryPosition() == (int) hist.size() - 1, "history position follows the click");
         }
 
+        // ---- bypass / switched off: no click, no hanging MIDI note, silence after ----
+        {
+            std::unique_ptr<juce::AudioProcessor> bb (createPluginFilter());
+            auto& bp = dynamic_cast<RollsKillaProcessor&> (*bb);
+            FakePlayHead bph;
+            bph.bpm = 140.0;
+            bph.playing = true;
+            bp.setPlayHead (&bph);
+            bp.setPlayConfigDetails (0, 2, sr, block);
+            bp.prepareToPlay (sr, block);
+            if (auto* pm = bp.getState().getParameter (rk::params::playMode))
+                pm->setValueNotifyingHost (pm->convertTo0to1 (1.0f));
+            juce::AudioBuffer<float> buf (2, block);
+            int ons = 0, offs = 0;
+            float lastSample = 0.0f;
+            for (int b = 0; b < 200; ++b)
+            {
+                juce::MidiBuffer midi;
+                bph.ppq = b * block * bph.bpm / 60.0 / sr;
+                bp.processBlock (buf, midi);
+                for (const auto m : midi)
+                {
+                    ons += m.getMessage().isNoteOn() ? 1 : 0;
+                    offs += m.getMessage().isNoteOff() ? 1 : 0;
+                }
+                lastSample = buf.getSample (0, block - 1);
+            }
+            juce::MidiBuffer midi;
+            bp.processBlockBypassed (buf, midi);
+            for (const auto m : midi)
+                offs += m.getMessage().isNoteOff() ? 1 : 0;
+            const auto jump = std::abs (buf.getSample (0, 0) - lastSample);
+            const auto tail = std::abs (buf.getSample (0, block - 1));
+            bp.processBlockBypassed (buf, midi);
+            const auto after = buf.getMagnitude (0, block);
+            expectTrue (ons > 0 && ons == offs, "bypass sends a note-off for every note (no hanging MIDI)");
+            expectTrue (jump < 0.2f && tail < 1.0e-4f, "bypass fades the hats out (no click)");
+            expectTrue (after < 1.0e-9f, "bypassed = silent");
+            bp.setPlayHead (nullptr);
+        }
+
         // ---- MIDI play mode: silent without a note, plays while a note is held --
         {
             std::unique_ptr<juce::AudioProcessor> gateBase (createPluginFilter());

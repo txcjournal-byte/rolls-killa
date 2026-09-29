@@ -478,6 +478,7 @@ void RollsKillaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     juce::ScopedNoDenormals noDenormals;
     const auto numSamples = buffer.getNumSamples();
     buffer.clear();
+    bypassFaded = false;
 
     // ---- transport ---------------------------------------------------------
     TransportState transport;
@@ -652,6 +653,36 @@ void RollsKillaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     const auto sounding = transport.playing && ! (midiGate && hostIsPlaying && numHeldNotes == 0);
     smoke.process (buffer.getWritePointer (0), buffer.getNumChannels() > 1 ? buffer.getWritePointer (1) : nullptr, numSamples,
                    raw.puff->load() / 100.0f, transport.ppq, transport.bpm / 60.0 / currentSampleRate, sounding);
+}
+
+void RollsKillaProcessor::processBlockBypassed (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+{
+    juce::ScopedNoDenormals noDenormals;
+    const auto numSamples = buffer.getNumSamples();
+    buffer.clear();
+    midi.clear();
+
+    // stopped transport -> the player releases every pending note (MIDI out must not hang)
+    const auto* pattern = patternSlot.acquire();
+    const auto numEvents = player.process (pattern, TransportState {}, numSamples, events);
+    patternSlot.release();
+    for (int i = 0; i < numEvents; ++i)
+        if (events[(size_t) i].vel == 0)
+            midi.addEvent (juce::MidiMessage::noteOff (1, events[(size_t) i].note), events[(size_t) i].sampleOffset);
+
+    if (! bypassFaded)
+    {
+        // the ringing hats fade out over a couple of ms instead of being cut (a cut = a click)
+        sampler.beginBlock (readSamplerSettings());
+        sampler.allNotesOff();
+        sampler.render (buffer, 0, numSamples);
+        sampler.endBlock();
+        smoke.reset();
+        heldNotes.fill (false);
+        numHeldNotes = 0;
+        hostPlaying.store (false, std::memory_order_relaxed);
+        bypassFaded = true;
+    }
 }
 
 //==============================================================================

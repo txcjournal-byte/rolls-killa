@@ -12,6 +12,8 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include <limits>
+
 class RollsKillaProcessor : public juce::AudioProcessor,
                             private juce::AudioProcessorValueTreeState::Listener,
                             private juce::Timer
@@ -22,6 +24,8 @@ public:
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
+    /** Bypassed / switched off: fade the hats out (no click), send note-offs, then stay silent. */
+    void processBlockBypassed (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     using AudioProcessor::processBlock;
@@ -33,7 +37,9 @@ public:
     bool acceptsMidi() const override { return true; }
     bool producesMidi() const override { return true; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 0.0; }
+    // The pattern plays by itself (from the transport), so the plugin is never "done":
+    // an infinite tail keeps hosts (FL Studio smart disable) from switching it off mid-pattern.
+    double getTailLengthSeconds() const override { return std::numeric_limits<double>::infinity(); }
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
@@ -154,6 +160,7 @@ private:
     std::atomic<juce::uint32> lastChangeMs { 0 };
     rk::UndoHistory history;
     double previewPpq = 0.0;
+    bool bypassFaded = false;
     double currentSampleRate = 44100.0;
 
     std::array<rk::PlayerEvent, rk::PatternPlayer::kMaxEventsPerBlock> events {};
