@@ -96,21 +96,22 @@ RollsKillaMiniEditor::RollsKillaMiniEditor (RollsKillaProcessor& p)
     dragButton.createFile = [this] { return proc.createDragMidiFile(); };
     dragButton.setTooltip ("Drag the roll into your DAW (FL Studio: drop on the Playlist or a Piano roll)");
 
-    playButton.onClick = [this] { proc.setPreviewEnabled (! proc.isPreviewEnabled()); updateStatus(); };
-    playButton.setTooltip ("Play the roll while the DAW is stopped");
+    playButton.onClick = [this] { togglePlay(); };
+    playButton.setTooltip ("Play / stop the roll while the DAW is stopped (or press SPACE in this window)");
     playMode.setTooltip ("MIDI: plays only while a note is held on this channel. HOST: plays whenever the DAW plays.");
 
     uiScale = (float) (double) proc.getState().state.getProperty (kMiniScaleProp, 1.25);  // 125 % default: small but readable
 
-    // never take the keyboard (also not by clicking a button): space, Ctrl+Z etc. stay with the DAW
-    std::function<void (juce::Component&)> noKeyboard = [&noKeyboard] (juce::Component& c)
+    // Keyboard: only the window itself takes focus (a click anywhere in it hands the focus up to it),
+    // no button does - so SPACE never "presses" the last clicked button, it plays/stops the plugin.
+    std::function<void (juce::Component&)> noButtonFocus = [&noButtonFocus] (juce::Component& c)
     {
         c.setWantsKeyboardFocus (false);
-        c.setMouseClickGrabsKeyboardFocus (false);
         for (auto* child : c.getChildren())
-            noKeyboard (*child);
+            noButtonFocus (*child);
     };
-    noKeyboard (*this);
+    noButtonFocus (content);
+    setWantsKeyboardFocus (true);
 
     layout();
     setUiScale (uiScale);
@@ -219,4 +220,27 @@ void RollsKillaMiniEditor::timerCallback()
 
     if (++frame % 2 == 0)
         updateStatus();
+}
+
+void RollsKillaMiniEditor::togglePlay()
+{
+    proc.setPreviewEnabled (! proc.isPreviewEnabled());
+    updateStatus();
+}
+
+bool RollsKillaMiniEditor::keyPressed (const juce::KeyPress& key)
+{
+    // SPACE = play/stop this plugin only (consumed, so the DAW does not start)
+    if (key.getKeyCode() == juce::KeyPress::spaceKey && ! key.getModifiers().isAnyModifierKeyDown())
+    {
+        togglePlay();
+        return true;
+    }
+    if (key.getModifiers().isCommandDown() && key.getKeyCode() == 'Z')
+    {
+        key.getModifiers().isShiftDown() ? proc.redo() : proc.undo();
+        updateStatus();
+        return true;
+    }
+    return false;
 }

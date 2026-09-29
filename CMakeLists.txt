@@ -121,13 +121,6 @@ set(ROLLSKILLA_PLUGIN_SOURCES
 )
 
 function(rollskilla_add_plugin target code name bundle description mini)
-    # The Mini window never takes the keyboard, so the DAW keeps its shortcuts (space = play).
-    if(mini)
-        set(wants_keyboard FALSE)
-    else()
-        set(wants_keyboard TRUE)
-    endif()
-
     juce_add_plugin(${target}
         COMPANY_NAME                "Killa"
         COMPANY_WEBSITE             ""
@@ -141,7 +134,7 @@ function(rollskilla_add_plugin target code name bundle description mini)
         NEEDS_MIDI_INPUT            TRUE
         NEEDS_MIDI_OUTPUT           TRUE
         IS_MIDI_EFFECT              FALSE
-        EDITOR_WANTS_KEYBOARD_FOCUS ${wants_keyboard}
+        EDITOR_WANTS_KEYBOARD_FOCUS TRUE
         COPY_PLUGIN_AFTER_BUILD     FALSE
         VST3_CATEGORIES             Instrument Drum Generator
         AU_MAIN_TYPE                kAudioUnitType_MusicDevice

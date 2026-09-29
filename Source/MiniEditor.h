@@ -9,7 +9,8 @@
     Rolls Killa Mini: the approved metal plate picture (docs/design/mini_metal.webp) is the face -
     BPM (follows the DAW), undo/redo, BARS, the roll window, KILL history lights,
     CHILL/TRAP/CRAZY + KILL, hi-hat, the blunt (PUFF smoke FX), DRAG TO DAW and PLAY.
-    The window never takes the keyboard, so the DAW's shortcuts (space = play) keep working.
+    Keyboard: while the plugin window is focused, SPACE plays/stops the plugin only (the DAW
+    does not start) and Ctrl+Z / Ctrl+Shift+Z undo/redo; click outside and the DAW has its keys back.
     Same processor and engine as Rolls Killa.
 */
 class RollsKillaMiniEditor : public juce::AudioProcessorEditor,
@@ -22,6 +23,7 @@ public:
 
     void paint (juce::Graphics&) override {}
     void resized() override;
+    bool keyPressed (const juce::KeyPress&) override;
 
     static constexpr int kBaseWidth = 600;
     static constexpr int kBaseHeight = 220;
@@ -41,6 +43,7 @@ private:
     void setUiScale (float scale);
     void updateStatus();
     void showScaleMenu();
+    void togglePlay();
 
     RollsKillaProcessor& proc;
     rk::ui::KillaLookAndFeel lookAndFeel;

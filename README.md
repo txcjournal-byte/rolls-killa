@@ -16,7 +16,7 @@ z vestavěného sampleru, nebo ho přetáhneš jako MIDI do projektu.
 Druhý plugin ve stejném projektu (`Rolls Killa Mini.vst3`): jedna malá kovová cedulka – „malinký nástroj,
 který zvládne milion věcí“. Vzhled je přímo schválený obrázek `docs/design/mini_metal.webp`
 (`tools/mini_skin/make_skin.py` z něj připraví `Resources/MiniSkin/`: vyčištěná deska + pohyblivé části),
-plugin přes něj kreslí jen to, co se hýbe. Okno nebere klávesnici, takže ve FL dál funguje mezerník (Play) atd.
+plugin přes něj kreslí jen to, co se hýbe. **Mezerník:** když je aktivní okno pluginu (klikni do něj), pouští/zastavuje jen plugin a FL se nehne; klikni mimo (Channel rack) a mezerník zase ovládá FL. Ctrl+Z v okně = undo.
 Výchozí velikost 125 % (~750 × 275 px), pravý klik na horní část = 100–200 %.
 Instaluje se stejně (GitHub Actions artefakt `RollsKillaMini-Windows-VST3`).
 

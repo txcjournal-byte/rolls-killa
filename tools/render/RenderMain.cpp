@@ -413,6 +413,20 @@ int main (int argc, char* argv[])
             expectTrue (hp.getKillHistoryPosition() == (int) hist.size() - 1, "history position follows the click");
         }
 
+        // ---- Mini window: SPACE plays/stops the plugin only (the key is consumed) ----
+        {
+            std::unique_ptr<juce::AudioProcessor> kb (createPluginFilter());
+            auto& kp = dynamic_cast<RollsKillaProcessor&> (*kb);
+            {
+                RollsKillaMiniEditor ed (kp);
+                const auto consumed = ed.keyPressed (juce::KeyPress (juce::KeyPress::spaceKey));
+                expectTrue (consumed && kp.isPreviewEnabled(), "Mini: SPACE starts the plugin and keeps the key from the DAW");
+                ed.keyPressed (juce::KeyPress (juce::KeyPress::spaceKey));
+                expectTrue (! kp.isPreviewEnabled(), "Mini: SPACE again stops it");
+                expectTrue (! ed.keyPressed (juce::KeyPress ('a')), "Mini: other keys go to the DAW");
+            }
+        }
+
         // ---- bypass / switched off: no click, no hanging MIDI note, silence after ----
         {
             std::unique_ptr<juce::AudioProcessor> bb (createPluginFilter());
