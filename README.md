@@ -11,6 +11,14 @@ z vestavěného sampleru, nebo ho přetáhneš jako MIDI do projektu.
 
 ![Rolls Killa](docs/screenshots/ui_main.png)
 
+## Rolls Killa Mini
+
+Druhý plugin ve stejném projektu (`Rolls Killa Mini.vst3`): jedno malé okno podle `docs/design/mini_window.webp`
+– visualizer, **KILL** (náhodný z 96 presetů + nová variace + jemné zamíchání knobů = miliony kombinací; pravý klik
+= jen nová variace tohoto presetu / zpět na originál), výběr hajtky, **DRAG MIDI**, **PLAY**, MIDI/HOST, undo/redo
+(↶ vrátí předchozí KILL). Výchozí velikost 125 % (~750 × 265 px), pravý klik na hlavičku = 100–200 %.
+Instaluje se stejně (GitHub Actions artefakt `RollsKillaMini-Windows-VST3`).
+
 ## Instalace (Windows)
 
 1. Zkompiluj projekt (níže) nebo si stáhni hotový build z GitHub Actions

@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "MiniEditor.h"
 #include "PluginEditor.h"
 
 using namespace rk;
@@ -166,6 +167,45 @@ void RollsKillaProcessor::kill()
 
     apvts.state.removeChild (apvts.state.getChildWithName (kEditsType), nullptr);
     setParam (params::seed, (float) next);
+    rebuildPattern();
+    commitUndoStep();
+}
+
+void RollsKillaProcessor::killEverything()
+{
+    auto& rng = juce::Random::getSystemRandom();
+    const auto numFactory = library.getNumFactoryPresets();
+    if (numFactory <= 0)
+        return;
+
+    auto pick = [&rng] (std::initializer_list<std::pair<float, float>> weighted)
+    {
+        float total = 0.0f;
+        for (const auto& w : weighted) total += w.second;
+        auto r = rng.nextFloat() * total;
+        for (const auto& w : weighted)
+        {
+            if (r < w.second) return w.first;
+            r -= w.second;
+        }
+        return weighted.begin()->first;
+    };
+
+    auto preset = getPresetIndex();
+    while (preset == getPresetIndex() && numFactory > 1)
+        preset = rng.nextInt (numFactory);
+
+    // 96 presets x 99,999 seeds x speed x variation x velocity x swing x density
+    // -> tens of millions of rolls, all built on presets that follow the kits
+    apvts.state.removeChild (apvts.state.getChildWithName (kEditsType), nullptr);
+    setParam (params::preset, (float) preset);
+    setParam (params::seed, (float) rng.nextInt ({ 1, params::kMaxSeed + 1 }));
+    setParam (params::variation, (float) rng.nextInt ({ 30, 91 }));
+    setParam (params::rollSpeed, pick ({ { 1.0f, 0.6f }, { 2.0f, 0.25f }, { 0.0f, 0.15f } }));
+    setParam (params::velMode, pick ({ { 0.0f, 0.75f }, { 2.0f, 0.15f }, { 3.0f, 0.10f } }));
+    setParam (params::swing, pick ({ { 0.0f, 0.7f }, { 10.0f, 0.15f }, { 20.0f, 0.15f } }));
+    setParam (params::density, pick ({ { 100.0f, 0.8f }, { 80.0f, 0.1f }, { 125.0f, 0.1f } }));
+    setParam (params::pitchRamp, pick ({ { 0.0f, 0.85f }, { 5.0f, 0.05f }, { 7.0f, 0.05f }, { -5.0f, 0.05f } }));
     rebuildPattern();
     commitUndoStep();
 }
@@ -518,7 +558,11 @@ void RollsKillaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 //==============================================================================
 juce::AudioProcessorEditor* RollsKillaProcessor::createEditor()
 {
+   #if ROLLSKILLA_MINI
+    return new RollsKillaMiniEditor (*this);
+   #else
     return new RollsKillaEditor (*this);
+   #endif
 }
 
 void RollsKillaProcessor::getStateInformation (juce::MemoryBlock& destData)

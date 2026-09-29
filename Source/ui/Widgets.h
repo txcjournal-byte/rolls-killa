@@ -85,7 +85,9 @@ public:
     void paintButton (juce::Graphics&, bool highlighted, bool down) override;
     void mouseDown (const juce::MouseEvent&) override;
     juce::String seedText;
+    juce::String caption;                        // small text under KILL (Mini)
     std::function<void()> onBackToOriginal;
+    std::function<void()> onSamePresetVariation; // Mini: right-click -> new variation of this preset
 };
 
 //==============================================================================
@@ -94,6 +96,7 @@ class DragMidiZone : public juce::Component, public juce::SettableTooltipClient
 {
 public:
     std::function<juce::File()> createFile;
+    bool vertical = false;     // icon above the text (Rolls Killa Mini)
     void paint (juce::Graphics&) override;
     void mouseEnter (const juce::MouseEvent&) override { repaint(); }
     void mouseExit (const juce::MouseEvent&) override { repaint(); }

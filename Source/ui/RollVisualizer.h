@@ -16,7 +16,8 @@ namespace rk::ui
 class RollVisualizer : public juce::Component, private juce::Timer
 {
 public:
-    explicit RollVisualizer (RollsKillaProcessor&);
+    /** compact = Rolls Killa Mini: no lock icons and no BARS selector inside, centered bar labels. */
+    explicit RollVisualizer (RollsKillaProcessor&, bool compact = false);
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -30,6 +31,8 @@ public:
 private:
     void timerCallback() override;
     juce::Rectangle<float> noteArea() const;
+    float headerH() const noexcept;
+    float footerH() const noexcept;
     juce::Rectangle<float> headerArea() const;
     float beatToX (double beat) const;
     int hitNote (juce::Point<float> p) const;
@@ -40,6 +43,7 @@ private:
 
     RollsKillaProcessor& processor;
     SegmentedChoice barsChoice;
+    bool compact = false;
 
     int shownVersion = -1;
     double lastPlayhead = -1.0;

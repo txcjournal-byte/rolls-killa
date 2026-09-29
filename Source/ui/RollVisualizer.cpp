@@ -7,37 +7,42 @@ namespace rk::ui
 
 namespace
 {
-    constexpr float kHeaderH = 26.0f;
-    constexpr float kFooterH = 22.0f;
+    constexpr float kHeaderFull = 26.0f, kHeaderCompact = 18.0f;
+    constexpr float kFooterFull = 22.0f, kFooterCompact = 4.0f;
     constexpr float kPadX = 10.0f;
     constexpr int kBarsSelectorW = 146;
 }
 
-RollVisualizer::RollVisualizer (RollsKillaProcessor& p)
+float RollVisualizer::headerH() const noexcept { return compact ? kHeaderCompact : kHeaderFull; }
+float RollVisualizer::footerH() const noexcept { return compact ? kFooterCompact : kFooterFull; }
+
+RollVisualizer::RollVisualizer (RollsKillaProcessor& p, bool isCompact)
     : processor (p),
-      barsChoice (p.getState(), params::bars, params::barsChoices)
+      barsChoice (p.getState(), params::bars, params::barsChoices),
+      compact (isCompact)
 {
-    addAndMakeVisible (barsChoice);
+    addChildComponent (barsChoice);
+    barsChoice.setVisible (! compact);
     setRepaintsOnMouseActivity (false);
     startTimerHz (60);
 }
 
 void RollVisualizer::resized()
 {
-    barsChoice.setBounds (getLocalBounds().removeFromTop ((int) kHeaderH).reduced (6, 3)
+    barsChoice.setBounds (getLocalBounds().removeFromTop ((int) headerH()).reduced (6, 3)
                               .removeFromRight (kBarsSelectorW).withTrimmedLeft (40));
 }
 
 juce::Rectangle<float> RollVisualizer::headerArea() const
 {
-    return getLocalBounds().toFloat().removeFromTop (kHeaderH).reduced (kPadX, 0.0f);
+    return getLocalBounds().toFloat().removeFromTop (headerH()).reduced (kPadX, 0.0f);
 }
 
 juce::Rectangle<float> RollVisualizer::noteArea() const
 {
     auto r = getLocalBounds().toFloat();
-    r.removeFromTop (kHeaderH + 6.0f);
-    r.removeFromBottom (kFooterH);
+    r.removeFromTop (headerH() + 6.0f);
+    r.removeFromBottom (footerH());
     return r.reduced (kPadX, 0.0f);
 }
 
@@ -82,7 +87,7 @@ void RollVisualizer::paint (juce::Graphics& g)
     const auto locks = processor.getLockedBars();
     const auto playhead = processor.getPlayheadBeat();
     const auto header = headerArea();
-    const auto barsRect = barsChoice.getBounds().toFloat().withTrimmedLeft (-40.0f);
+    const auto barsRect = compact ? juce::Rectangle<float>() : barsChoice.getBounds().toFloat().withTrimmedLeft (-40.0f);
 
     // subtle backdrop inside the note area
     g.setGradientFill (juce::ColourGradient (juce::Colour (0xff0b0b0d), area.getX(), area.getY(),
@@ -106,6 +111,17 @@ void RollVisualizer::paint (juce::Graphics& g)
     for (int bar = 0; bar < bars; ++bar)
     {
         const auto x = beatToX (bar * (double) kBeatsPerBar);
+
+        if (compact)
+        {
+            const auto x1 = beatToX ((bar + 1) * (double) kBeatsPerBar);
+            g.setColour (colours::textDim);
+            g.setFont (labelFont (10.5f));
+            g.drawText ((bars > 4 ? "" : "BAR ") + juce::String (bar + 1), juce::Rectangle<float> (x, header.getY(), x1 - x, headerH()),
+                        juce::Justification::centred, false);
+            continue;
+        }
+
         const auto lb = lockBounds (bar);
         if (lb.intersects (barsRect))
             continue;
@@ -113,7 +129,7 @@ void RollVisualizer::paint (juce::Graphics& g)
         const auto locked = (locks & (1u << bar)) != 0;
         g.setColour (colours::textDim);
         g.setFont (labelFont (11.0f));
-        g.drawText ((bars > 4 ? "" : "BAR ") + juce::String (bar + 1), juce::Rectangle<float> (x + 8.0f, header.getY(), 50.0f, kHeaderH),
+        g.drawText ((bars > 4 ? "" : "BAR ") + juce::String (bar + 1), juce::Rectangle<float> (x + 8.0f, header.getY(), 50.0f, headerH()),
                     juce::Justification::centredLeft, false);
         drawIcon (g, locked ? Icon::lock : Icon::unlock, lb.reduced (1.0f),
                   locked ? colours::accent : (hoverLock == bar ? colours::text : colours::textDark));
@@ -123,17 +139,20 @@ void RollVisualizer::paint (juce::Graphics& g)
             g.fillRect (juce::Rectangle<float>::leftTopRightBottom (x, area.getY(), beatToX ((bar + 1) * (double) kBeatsPerBar), area.getBottom()));
         }
     }
-    g.setColour (colours::textDim);
-    g.setFont (labelFont (11.0f));
-    g.drawText ("BARS", barsRect.withWidth (40.0f), juce::Justification::centredLeft, false);
+    if (! compact)
+    {
+        g.setColour (colours::textDim);
+        g.setFont (labelFont (11.0f));
+        g.drawText ("BARS", barsRect.withWidth (40.0f), juce::Justification::centredLeft, false);
+    }
 
     // footer: beat numbers
     g.setFont (uiFont (11.0f, false));
-    for (int beat = 0; beat < (int) len; ++beat)
+    for (int beat = 0; beat < (compact ? 0 : (int) len); ++beat)
     {
         const auto x0 = beatToX (beat), x1 = beatToX (beat + 1);
         g.setColour (colours::textDark);
-        g.drawText (juce::String (beat % kBeatsPerBar + 1), juce::Rectangle<float> (x0, area.getBottom() + 3.0f, x1 - x0, kFooterH - 4.0f),
+        g.drawText (juce::String (beat % kBeatsPerBar + 1), juce::Rectangle<float> (x0, area.getBottom() + 3.0f, x1 - x0, footerH() - 4.0f),
                     juce::Justification::centred, false);
     }
 
@@ -276,6 +295,9 @@ int RollVisualizer::hitNote (juce::Point<float> p) const
 
 int RollVisualizer::hitLock (juce::Point<float> p) const
 {
+    if (compact)
+        return -1;
+
     const auto bars = processor.getModel().getPattern().bars;
     for (int bar = 0; bar < bars; ++bar)
         if (lockBounds (bar).expanded (4.0f).contains (p))

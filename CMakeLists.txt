@@ -86,28 +86,11 @@ if(APPLE)
     list(APPEND ROLLSKILLA_FORMATS AU)
 endif()
 
-juce_add_plugin(RollsKilla
-    COMPANY_NAME                "Killa"
-    COMPANY_WEBSITE             ""
-    BUNDLE_ID                   com.killa.rollskilla
-    PLUGIN_MANUFACTURER_CODE    Klla
-    PLUGIN_CODE                 RlKl
-    PRODUCT_NAME                "Rolls Killa"
-    DESCRIPTION                 "Hi-Hat Roll Presets"
-    FORMATS                     ${ROLLSKILLA_FORMATS}
-    IS_SYNTH                    TRUE
-    NEEDS_MIDI_INPUT            TRUE
-    NEEDS_MIDI_OUTPUT           TRUE
-    IS_MIDI_EFFECT              FALSE
-    EDITOR_WANTS_KEYBOARD_FOCUS TRUE
-    COPY_PLUGIN_AFTER_BUILD     FALSE
-    VST3_CATEGORIES             Instrument Drum Generator
-    AU_MAIN_TYPE                kAudioUnitType_MusicDevice
-)
-
-target_sources(RollsKilla PRIVATE
+# Both plugins share the processor and the engine; the Mini one has its own small editor.
+set(ROLLSKILLA_PLUGIN_SOURCES
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
+    Source/MiniEditor.cpp
     Source/Parameters.cpp
     Source/ui/KillaLookAndFeel.cpp
     Source/ui/RollVisualizer.cpp
@@ -118,23 +101,47 @@ target_sources(RollsKilla PRIVATE
     ${ROLLSKILLA_ENGINE_SOURCES}
 )
 
-target_include_directories(RollsKilla PRIVATE Source)
+function(rollskilla_add_plugin target code name bundle description mini)
+    juce_add_plugin(${target}
+        COMPANY_NAME                "Killa"
+        COMPANY_WEBSITE             ""
+        BUNDLE_ID                   ${bundle}
+        PLUGIN_MANUFACTURER_CODE    Klla
+        PLUGIN_CODE                 ${code}
+        PRODUCT_NAME                "${name}"
+        DESCRIPTION                 "${description}"
+        FORMATS                     ${ROLLSKILLA_FORMATS}
+        IS_SYNTH                    TRUE
+        NEEDS_MIDI_INPUT            TRUE
+        NEEDS_MIDI_OUTPUT           TRUE
+        IS_MIDI_EFFECT              FALSE
+        EDITOR_WANTS_KEYBOARD_FOCUS TRUE
+        COPY_PLUGIN_AFTER_BUILD     FALSE
+        VST3_CATEGORIES             Instrument Drum Generator
+        AU_MAIN_TYPE                kAudioUnitType_MusicDevice
+    )
 
-target_compile_definitions(RollsKilla PUBLIC ${ROLLSKILLA_COMMON_DEFINITIONS})
+    target_sources(${target} PRIVATE ${ROLLSKILLA_PLUGIN_SOURCES})
+    target_include_directories(${target} PRIVATE Source)
+    target_compile_definitions(${target} PUBLIC ${ROLLSKILLA_COMMON_DEFINITIONS} ROLLSKILLA_MINI=${mini})
 
-target_link_libraries(RollsKilla
-    PRIVATE
-        RollsKillaPresetData
-        RollsKillaSampleData
-        ${ROLLSKILLA_ENGINE_MODULES}
-        juce::juce_audio_utils
-        juce::juce_audio_processors
-        juce::juce_gui_basics
-        juce::juce_gui_extra
-    PUBLIC
-        juce::juce_recommended_config_flags
-        juce::juce_recommended_warning_flags
-)
+    target_link_libraries(${target}
+        PRIVATE
+            RollsKillaPresetData
+            RollsKillaSampleData
+            ${ROLLSKILLA_ENGINE_MODULES}
+            juce::juce_audio_utils
+            juce::juce_audio_processors
+            juce::juce_gui_basics
+            juce::juce_gui_extra
+        PUBLIC
+            juce::juce_recommended_config_flags
+            juce::juce_recommended_warning_flags
+    )
+endfunction()
+
+rollskilla_add_plugin(RollsKilla     RlKl "Rolls Killa"      com.killa.rollskilla     "Hi-Hat Roll Presets"            0)
+rollskilla_add_plugin(RollsKillaMini RlKm "Rolls Killa Mini" com.killa.rollskillamini "Hi-Hat Roll Presets - one KILL" 1)
 
 # ---------------------------------------------------------------------------
 # Tests (JUCE UnitTest, no GUI)

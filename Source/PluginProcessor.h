@@ -57,6 +57,8 @@ public:
     void stepPreset (int delta);                    // prev/next inside the whole library
     int getPresetIndex() const;
     void kill();                                    // new variation seed
+    /** Rolls Killa Mini: random preset + new variation + a musical shuffle of the knobs (one undo step). */
+    void killEverything();
     void resetVariation();                          // back to the original preset
     uint32_t getSeed() const;
 

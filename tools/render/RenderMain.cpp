@@ -3,6 +3,7 @@
 //
 //   RollsKillaRender <outDir> [--loops N] [--preset "Name"] [--check]
 
+#include "MiniEditor.h"
 #include "PluginEditor.h"
 #include "ui/Sigils.h"
 #include "PluginProcessor.h"
@@ -132,7 +133,9 @@ int main (int argc, char* argv[])
                 if (lib.getPreset (i).name.equalsIgnoreCase (only))
                     proc.loadPreset (i);
 
-        std::unique_ptr<juce::AudioProcessorEditor> editor (proc.createEditor());
+        std::unique_ptr<juce::AudioProcessorEditor> editor (args.contains ("--mini")
+                                                                ? static_cast<juce::AudioProcessorEditor*> (new RollsKillaMiniEditor (proc))
+                                                                : proc.createEditor());
         editor->setVisible (true);
 
         // advance the playhead a bit so the visualizer shows it
@@ -155,7 +158,7 @@ int main (int argc, char* argv[])
             std::cout << "wrote " << file.getFullPathName() << std::endl;
         };
 
-        save ("ui_main.png", 2.0f);
+        save (args.contains ("--mini") ? "ui_mini.png" : "ui_main.png", 2.0f);
 
         {
             const auto logo = rk::ui::renderLogo (60, 5.0f);
@@ -329,6 +332,26 @@ int main (int argc, char* argv[])
             expectTrue (samePattern (original, p3.getModel().getPattern()), "undo restores the pattern before KILL");
             p3.redo();
             expectTrue (samePattern (killed, p3.getModel().getPattern()), "redo brings the KILL back");
+        }
+
+        // ---- Mini KILL: random preset + variation, one undo step goes back ----
+        {
+            std::unique_ptr<juce::AudioProcessor> mb (createPluginFilter());
+            auto& mp = dynamic_cast<RollsKillaProcessor&> (*mb);
+            const auto before = mp.getPresetIndex();
+            const auto beforePattern = mp.getModel().getPattern();
+            bool changedPreset = false;
+            for (int i = 0; i < 5; ++i)
+            {
+                mp.killEverything();
+                changedPreset = changedPreset || mp.getPresetIndex() != before;
+                expectTrue (mp.getSeed() != 0, "Mini KILL sets a variation seed");
+            }
+            expectTrue (changedPreset, "Mini KILL picks other presets");
+            for (int i = 0; i < 5; ++i)
+                mp.undo();
+            expectTrue (mp.getPresetIndex() == before && samePattern (beforePattern, mp.getModel().getPattern()),
+                        "each Mini KILL is one undo step");
         }
 
         // ---- MIDI play mode: silent without a note, plays while a note is held --

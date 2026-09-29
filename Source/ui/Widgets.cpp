@@ -255,12 +255,18 @@ void KillButton::mouseDown (const juce::MouseEvent& e)
     }
 
     juce::PopupMenu menu;
+    if (onSamePresetVariation != nullptr)
+        menu.addItem (2, "New variation of this preset only");
     menu.addItem (1, "Back to the original preset", seedText.isNotEmpty());
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
                         [safe = juce::Component::SafePointer<KillButton> (this)] (int result)
                         {
-                            if (safe != nullptr && result == 1 && safe->onBackToOriginal != nullptr)
+                            if (safe == nullptr)
+                                return;
+                            if (result == 1 && safe->onBackToOriginal != nullptr)
                                 safe->onBackToOriginal();
+                            if (result == 2 && safe->onSamePresetVariation != nullptr)
+                                safe->onSamePresetVariation();
                         });
 }
 
@@ -287,9 +293,17 @@ void KillButton::paintButton (juce::Graphics& g, bool highlighted, bool down)
     g.drawRoundedRectangle (r, corner, 1.0f);
 
     // text
-    auto font = juce::Font (juce::FontOptions (r.getHeight() * 0.78f, juce::Font::bold)).withHorizontalScale (1.05f);
+    auto textArea = r;
+    if (caption.isNotEmpty())
+    {
+        auto cap = textArea.removeFromBottom (r.getHeight() * 0.26f);
+        g.setColour (juce::Colour (0xff2a0206).withAlpha (0.85f));
+        g.setFont (labelFont (juce::jmax (7.5f, r.getHeight() * 0.13f)));
+        g.drawText (caption, cap.translated (0.0f, -r.getHeight() * 0.06f), juce::Justification::centred, false);
+    }
+    auto font = juce::Font (juce::FontOptions (textArea.getHeight() * 0.86f, juce::Font::bold)).withHorizontalScale (1.05f);
     juce::GlyphArrangement ga;
-    ga.addFittedText (font, "KILL", r.getX(), r.getY(), r.getWidth(), r.getHeight(), juce::Justification::centred, 1);
+    ga.addFittedText (font, "KILL", textArea.getX(), textArea.getY(), textArea.getWidth(), textArea.getHeight(), juce::Justification::centred, 1);
     juce::Path letters;
     ga.createPath (letters);
     letters.applyTransform (juce::AffineTransform::shear (-0.12f, 0.0f).translated (r.getCentreY() * 0.12f, 0.0f));
@@ -324,6 +338,18 @@ void DragMidiZone::paint (juce::Graphics& g)
     {
         g.setColour (colours::accent.withAlpha (0.06f));
         g.fillRoundedRectangle (r, 6.0f);
+    }
+
+    if (vertical)
+    {
+        auto c = r.reduced (6.0f);
+        const auto iconSize = juce::jmin (c.getHeight() * 0.5f, 34.0f);
+        drawIcon (g, Icon::midiDrag, c.removeFromTop (c.getHeight() * 0.62f).withSizeKeepingCentre (iconSize, iconSize),
+                  hot ? colours::accent : colours::textDim);
+        g.setColour (hot ? colours::accent : colours::text);
+        g.setFont (labelFont (11.5f));
+        g.drawText ("DRAG MIDI", c, juce::Justification::centredTop, false);
+        return;
     }
 
     auto content = r.reduced (12.0f);
