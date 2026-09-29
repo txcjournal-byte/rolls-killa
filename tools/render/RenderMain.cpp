@@ -133,6 +133,14 @@ int main (int argc, char* argv[])
                 if (lib.getPreset (i).name.equalsIgnoreCase (only))
                     proc.loadPreset (i);
 
+        // a few KILLs so the Mini history dots show up
+        if (args.contains ("--mini") && only.isEmpty())
+        {
+            for (int i = 0; i < 5; ++i)
+                proc.killEverything();
+            proc.restoreKillHistory (3);
+        }
+
         std::unique_ptr<juce::AudioProcessorEditor> editor (args.contains ("--mini")
                                                                 ? static_cast<juce::AudioProcessorEditor*> (new RollsKillaMiniEditor (proc))
                                                                 : proc.createEditor());
@@ -338,20 +346,64 @@ int main (int argc, char* argv[])
         {
             std::unique_ptr<juce::AudioProcessor> mb (createPluginFilter());
             auto& mp = dynamic_cast<RollsKillaProcessor&> (*mb);
-            const auto before = mp.getPresetIndex();
+            const auto beforePreset = mp.getPresetIndex();
             const auto beforePattern = mp.getModel().getPattern();
             bool changedPreset = false;
             for (int i = 0; i < 5; ++i)
             {
                 mp.killEverything();
-                changedPreset = changedPreset || mp.getPresetIndex() != before;
+                changedPreset = changedPreset || mp.getPresetIndex() != beforePreset;
                 expectTrue (mp.getSeed() != 0, "Mini KILL sets a variation seed");
             }
             expectTrue (changedPreset, "Mini KILL picks other presets");
             for (int i = 0; i < 5; ++i)
                 mp.undo();
-            expectTrue (mp.getPresetIndex() == before && samePattern (beforePattern, mp.getModel().getPattern()),
+            expectTrue (mp.getPresetIndex() == beforePreset && samePattern (beforePattern, mp.getModel().getPattern()),
                         "each Mini KILL is one undo step");
+        }
+
+        // ---- Mini mood + tempo + KILL history ----
+        {
+            std::unique_ptr<juce::AudioProcessor> hb (createPluginFilter());
+            auto& hp = dynamic_cast<RollsKillaProcessor&> (*hb);
+            const auto& presetLib = hp.getLibrary();
+            auto moodOf = [&] (int index)
+            {
+                const auto siblings = presetLib.presetsInCategory (presetLib.getPreset (index).category);
+                const auto pos = (int) std::distance (siblings.begin(), std::find (siblings.begin(), siblings.end(), index));
+                return pos <= 2 ? 0 : (pos <= 5 ? 1 : 2);
+            };
+            for (int mood = 0; mood < 3; ++mood)
+            {
+                hp.setMood (mood);
+                int hits = 0;
+                for (int i = 0; i < 20; ++i)
+                {
+                    hp.killEverything();
+                    hits += moodOf (hp.getPresetIndex()) == mood ? 1 : 0;
+                }
+                expectTrue (hits >= 16, "Mini KILL follows the CHILL/TRAP/CRAZY mood");
+            }
+
+            hp.setMood (1);
+            hp.setTargetBpm (70.0);
+            int slowFit = 0;
+            for (int i = 0; i < 20; ++i)
+            {
+                hp.killEverything();
+                const auto hint = presetLib.getPreset (hp.getPresetIndex()).bpmHint;
+                slowFit += (std::abs (hint - 70.0) < 15.0 || std::abs (hint - 140.0) < 15.0) ? 1 : 0;
+            }
+            expectTrue (slowFit >= 16, "Mini KILL picks presets that fit the tempo");
+            expectTrue (std::abs (hp.getEffectiveBpm() - 70.0) < 0.01, "manual BPM overrides");
+
+            const auto& hist = hp.getKillHistory();
+            expectTrue ((int) hist.size() == RollsKillaProcessor::kMaxKillHistory, "KILL history keeps the last 8");
+            const auto firstPreset = hp.getPresetIndex();
+            hp.restoreKillHistory (0);
+            hp.restoreKillHistory ((int) hist.size() - 1);
+            expectTrue (hp.getPresetIndex() == firstPreset, "KILL history dot restores that KILL");
+            expectTrue (hp.getKillHistoryPosition() == (int) hist.size() - 1, "history position follows the click");
         }
 
         // ---- MIDI play mode: silent without a note, plays while a note is held --

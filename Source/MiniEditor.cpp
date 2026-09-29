@@ -8,8 +8,10 @@ namespace
 {
     // Layout at 100 % (matches docs/design/mini_window.webp)
     const juce::Rectangle<int> kHeader     { 6, 6, 588, 30 };
-    const juce::Rectangle<int> kVisualizer { 6, 40, 588, 88 };
-    const juce::Rectangle<int> kKill       { 6, 134, 210, 72 };
+    const juce::Rectangle<int> kVisualizer { 6, 40, 588, 78 };
+    const juce::Rectangle<int> kHistory    { 6, 119, 588, 12 };
+    const juce::Rectangle<int> kMood       { 6, 134, 210, 16 };
+    const juce::Rectangle<int> kKill       { 6, 151, 210, 55 };
     const juce::Rectangle<int> kHat        { 222, 134, 150, 72 };
     const juce::Rectangle<int> kDrag       { 378, 134, 122, 72 };
     const juce::Rectangle<int> kPlay       { 506, 134, 88, 72 };
@@ -56,11 +58,11 @@ void RollsKillaMiniEditor::Content::paint (juce::Graphics& g)
     g.drawVerticalLine ((int) x0, 13.0f, 29.0f);
     g.setColour (colours::text.withAlpha (0.85f));
     g.setFont (labelFont (8.5f).withExtraKerningFactor (0.4f));
-    g.drawText ("HI-HAT ROLL PRESETS", juce::Rectangle<float> (x0 + 9.0f, 6.0f, 150.0f, 30.0f), juce::Justification::centredLeft, false);
+    g.drawText ("HI-HAT ROLLS", juce::Rectangle<float> (x0 + 8.0f, 6.0f, 300.0f - x0 - 8.0f, 30.0f), juce::Justification::centredLeft, true);
 
     // what plays now (display only - KILL is the way to change it)
     const auto& preset = ed.proc.getModel().getPreset();
-    auto now = juce::Rectangle<float> (386.0f, 6.0f, 108.0f, 30.0f);
+    auto now = juce::Rectangle<float> (364.0f, 6.0f, 88.0f, 30.0f);
     g.setColour (colours::textDim);
     g.setFont (labelFont (7.5f));
     g.drawText (juce::String (getCategoryProfile (preset.category).name), now.removeFromTop (17.0f), juce::Justification::bottomLeft, true);
@@ -70,7 +72,7 @@ void RollsKillaMiniEditor::Content::paint (juce::Graphics& g)
 
     g.setColour (colours::textDim);
     g.setFont (labelFont (9.0f));
-    g.drawText ("BARS", juce::Rectangle<float> (500.0f, 6.0f, 34.0f, 30.0f), juce::Justification::centredLeft, false);
+    g.drawText ("BARS", juce::Rectangle<float> (505.0f, 6.0f, 30.0f, 30.0f), juce::Justification::centredLeft, false);
 
     // bottom tiles
     drawPanel (g, kHat.toFloat(), 5.0f);
@@ -131,6 +133,23 @@ RollsKillaMiniEditor::RollsKillaMiniEditor (RollsKillaProcessor& p)
                                                               &waveform, &hatSelector, &dragZone, &playTile, &playMode })
         content.addAndMakeVisible (c);
 
+    content.addAndMakeVisible (bpmBox);
+    content.addAndMakeVisible (history);
+    bpmBox.setTooltip ("Tempo KILL builds rolls for. AUTO = follows the project. Drag up/down to set it, double-click = AUTO.");
+    history.setTooltip ("The last KILLs - click a dot to go back to that roll");
+
+    const char* moods[] { "CHILL", "TRAP", "CRAZY" };
+    const char* moodTips[] { "KILL picks simple, calm rolls", "KILL picks classic trap rolls", "KILL picks the craziest rolls" };
+    for (int i = 0; i < 3; ++i)
+    {
+        auto* b = moodButtons.add (new juce::TextButton (moods[i]));
+        b->setTooltip (moodTips[i]);
+        b->setMouseCursor (juce::MouseCursor::PointingHandCursor);
+        b->onClick = [this, i] { setMood (i); };
+        content.addAndMakeVisible (b);
+    }
+    setMood (proc.getMood());
+
     undoButton.setTooltip ("Undo - e.g. back to the previous KILL (Ctrl+Z)");
     redoButton.setTooltip ("Redo (Ctrl+Shift+Z)");
     undoButton.onClick = [this] { proc.undo(); updateStatus(); };
@@ -169,12 +188,101 @@ RollsKillaMiniEditor::~RollsKillaMiniEditor()
     setLookAndFeel (nullptr);
 }
 
+void RollsKillaMiniEditor::setMood (int mood)
+{
+    proc.setMood (mood);
+    for (int i = 0; i < moodButtons.size(); ++i)
+        moodButtons[i]->setToggleState (i == proc.getMood(), juce::dontSendNotification);
+}
+
+//==============================================================================
+void RollsKillaMiniEditor::BpmBox::paint (juce::Graphics& g)
+{
+    auto r = getLocalBounds().toFloat().reduced (0.5f);
+    const auto manual = proc.getTargetBpm() > 0.0;
+    g.setColour (colours::background);
+    g.fillRoundedRectangle (r, 3.0f);
+    g.setColour (manual ? colours::accent.withAlpha (0.8f) : colours::outline);
+    g.drawRoundedRectangle (r, 3.0f, 1.0f);
+
+    auto top = r.removeFromTop (r.getHeight() * 0.62f);
+    g.setColour (colours::text);
+    g.setFont (uiFont (11.0f));
+    g.drawText (juce::String (juce::roundToInt (proc.getEffectiveBpm())), top, juce::Justification::centredBottom, false);
+    g.setColour (manual ? colours::accent : colours::textDark);
+    g.setFont (labelFont (6.5f));
+    g.drawText (manual ? "BPM" : "AUTO BPM", r, juce::Justification::centredTop, false);
+}
+
+void RollsKillaMiniEditor::BpmBox::mouseDrag (const juce::MouseEvent& e)
+{
+    proc.setTargetBpm (std::round (startBpm - e.getDistanceFromDragStartY() * 0.5));
+    repaint();
+}
+
+juce::Rectangle<float> RollsKillaMiniEditor::HistoryStrip::dotBounds (int i, int count) const
+{
+    const auto spacing = 14.0f;
+    const auto x0 = getWidth() * 0.5f - (count - 1) * spacing * 0.5f;
+    return juce::Rectangle<float> (8.0f, 8.0f).withCentre ({ x0 + i * spacing, getHeight() * 0.5f });
+}
+
+void RollsKillaMiniEditor::HistoryStrip::paint (juce::Graphics& g)
+{
+    const auto& h = proc.getKillHistory();
+    const auto count = (int) h.size();
+    if (count == 0)
+        return;
+
+    for (int i = 0; i < count; ++i)
+    {
+        auto d = dotBounds (i, count);
+        const auto current = i == proc.getKillHistoryPosition();
+        if (current)
+        {
+            g.setColour (colours::accent.withAlpha (0.3f));
+            g.fillEllipse (d.expanded (2.5f));
+        }
+        g.setColour (current ? colours::accent : (i == hover ? colours::text : colours::outlineLight));
+        g.fillEllipse (current || i == hover ? d : d.reduced (1.0f));
+    }
+}
+
+void RollsKillaMiniEditor::HistoryStrip::mouseMove (const juce::MouseEvent& e)
+{
+    const auto& h = proc.getKillHistory();
+    int found = -1;
+    for (int i = 0; i < (int) h.size(); ++i)
+        if (dotBounds (i, (int) h.size()).expanded (4.0f).contains (e.position))
+            found = i;
+    if (found != hover)
+    {
+        hover = found;
+        setTooltip (found >= 0 ? h[(size_t) found].label : juce::String ("The last KILLs - click a dot to go back to that roll"));
+        setMouseCursor (found >= 0 ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor);
+        repaint();
+    }
+}
+
+void RollsKillaMiniEditor::HistoryStrip::mouseUp (const juce::MouseEvent&)
+{
+    if (hover >= 0)
+    {
+        proc.restoreKillHistory (hover);
+        repaint();
+    }
+}
+
 void RollsKillaMiniEditor::layout()
 {
     visualizer.setBounds (kVisualizer);
-    barsChoice.setBounds (530, 12, 60, 18);
-    undoButton.setBounds (326, 11, 24, 20);
-    redoButton.setBounds (354, 11, 24, 20);
+    barsChoice.setBounds (532, 12, 58, 18);
+    undoButton.setBounds (306, 11, 24, 20);
+    redoButton.setBounds (334, 11, 24, 20);
+    bpmBox.setBounds (456, 10, 44, 22);
+    history.setBounds (kHistory);
+    for (int i = 0; i < moodButtons.size(); ++i)
+        moodButtons[i]->setBounds (kMood.getX() + i * (kMood.getWidth() / 3), kMood.getY(), kMood.getWidth() / 3 - (i < 2 ? 2 : 0), kMood.getHeight());
     killButton.setBounds (kKill);
     waveform.setBounds (kHat.getX() + 8, kHat.getY() + 20, kHat.getWidth() - 16, 26);
     hatSelector.setBounds (kHat.getX() + 6, kHat.getBottom() - 24, kHat.getWidth() - 12, 20);
@@ -224,6 +332,8 @@ void RollsKillaMiniEditor::updateStatus()
     playTile.setEnabled (! hostPlaying);
     undoButton.setEnabled (proc.canUndo());
     redoButton.setEnabled (proc.canRedo());
+    bpmBox.repaint();
+    history.repaint();
 
     const auto seed = proc.getSeed();
     killButton.seedText = seed != 0 ? "#" + juce::String ((int) seed) : juce::String();

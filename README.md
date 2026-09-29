@@ -19,6 +19,14 @@ Druhý plugin ve stejném projektu (`Rolls Killa Mini.vst3`): jedno malé okno p
 (↶ vrátí předchozí KILL). Výchozí velikost 125 % (~750 × 265 px), pravý klik na hlavičku = 100–200 %.
 Instaluje se stejně (GitHub Actions artefakt `RollsKillaMini-Windows-VST3`).
 
+- **BPM** (v hlavičce): KILL vybírá rolly, které sedí na tempo projektu (**AUTO BPM** = bere tempo z DAW).
+  Tažením nahoru/dolů nastavíš vlastní tempo, dvojklik = zpět AUTO. Preview a DRAG MIDI jdou v tomto tempu.
+- **CHILL / TRAP / CRAZY** nad KILL: CHILL = jednoduché rolly (presety 1–3 kategorie), TRAP = klasika (4–6),
+  CRAZY = nejdivočejší (7–8).
+- **Tečky pod visualizerem** = posledních 8 KILLů. Klik na tečku vrátí ten roll (najetí myší ukáže název).
+
+![Rolls Killa Mini](docs/screenshots/ui_mini.png)
+
 ## Instalace (Windows)
 
 1. Zkompiluj projekt (níže) nebo si stáhni hotový build z GitHub Actions

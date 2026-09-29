@@ -43,7 +43,35 @@ private:
         bool previewing = false, hostPlaying = false;
     };
 
+    /** "135 BPM" - follows the host (AUTO); drag up/down to set a tempo, double-click = AUTO again. */
+    class BpmBox : public juce::Component, public juce::SettableTooltipClient
+    {
+    public:
+        explicit BpmBox (RollsKillaProcessor& p) : proc (p) { setMouseCursor (juce::MouseCursor::UpDownResizeCursor); }
+        void paint (juce::Graphics&) override;
+        void mouseDown (const juce::MouseEvent&) override { startBpm = proc.getEffectiveBpm(); }
+        void mouseDrag (const juce::MouseEvent& e) override;
+        void mouseDoubleClick (const juce::MouseEvent&) override { proc.setTargetBpm (0.0); repaint(); }
+        RollsKillaProcessor& proc;
+        double startBpm = 140.0;
+    };
+
+    /** The last KILLs as dots - click one to go back to that roll. */
+    class HistoryStrip : public juce::Component, public juce::SettableTooltipClient
+    {
+    public:
+        explicit HistoryStrip (RollsKillaProcessor& p) : proc (p) {}
+        void paint (juce::Graphics&) override;
+        void mouseMove (const juce::MouseEvent&) override;
+        void mouseExit (const juce::MouseEvent&) override { hover = -1; repaint(); }
+        void mouseUp (const juce::MouseEvent&) override;
+        juce::Rectangle<float> dotBounds (int i, int count) const;
+        RollsKillaProcessor& proc;
+        int hover = -1;
+    };
+
     void timerCallback() override;
+    void setMood (int mood);
     void layout();
     void setUiScale (float scale);
     void updateStatus();
@@ -63,6 +91,9 @@ private:
     rk::ui::HatSelector hatSelector;
     rk::ui::DragMidiZone dragZone;
     PlayTile playTile;
+    BpmBox bpmBox { proc };
+    HistoryStrip history { proc };
+    juce::OwnedArray<juce::TextButton> moodButtons;
     rk::ui::SegmentedChoice playMode;
     juce::TooltipWindow tooltips { this, 600 };
 

@@ -57,8 +57,26 @@ public:
     void stepPreset (int delta);                    // prev/next inside the whole library
     int getPresetIndex() const;
     void kill();                                    // new variation seed
-    /** Rolls Killa Mini: random preset + new variation + a musical shuffle of the knobs (one undo step). */
+    /** Rolls Killa Mini: random preset + new variation + a musical shuffle of the knobs (one undo step).
+        Picks presets that fit the project tempo and the mood (CHILL / TRAP / CRAZY). */
     void killEverything();
+
+    // Tempo: the host tempo is followed automatically; a manual value overrides it (0 = auto)
+    double getEffectiveBpm() const;
+    double getHostBpm() const noexcept { return hostBpm.load(); }
+    double getTargetBpm() const;
+    void setTargetBpm (double bpm);
+
+    // Mood for KILL: 0 = CHILL (presets 1-3 of a category), 1 = TRAP (4-6), 2 = CRAZY (7-8)
+    int getMood() const;
+    void setMood (int mood);
+
+    // History of the last KILLs (Mini): click a dot to go back to that roll
+    static constexpr int kMaxKillHistory = 8;
+    struct HistoryEntry { juce::ValueTree state; juce::String label; };
+    const std::vector<HistoryEntry>& getKillHistory() const noexcept { return killHistory; }
+    int getKillHistoryPosition() const noexcept { return killHistoryPos; }
+    void restoreKillHistory (int index);
     void resetVariation();                          // back to the original preset
     uint32_t getSeed() const;
 
@@ -117,6 +135,10 @@ private:
 
     std::atomic<bool> patternDirty { true };
     std::atomic<bool> previewEnabled { false };
+    std::atomic<double> hostBpm { 0.0 };
+    std::atomic<double> previewBpm { 0.0 };
+    std::vector<HistoryEntry> killHistory;
+    int killHistoryPos = -1;
     std::atomic<bool> previewRestart { false };
     std::atomic<bool> hostPlaying { false };
     std::atomic<bool> waitingForMidi { false };

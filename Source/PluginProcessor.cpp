@@ -100,6 +100,8 @@ void RollsKillaProcessor::markStateChanged()
 
 void RollsKillaProcessor::timerCallback()
 {
+    previewBpm.store (getEffectiveBpm());
+
     if (patternDirty.load())
         rebuildPattern();
 
@@ -191,23 +193,110 @@ void RollsKillaProcessor::killEverything()
         return weighted.begin()->first;
     };
 
+    // Presets that fit the project tempo (half/double time counts as fitting) and the mood
+    const auto bpm = getEffectiveBpm();
+    const auto mood = getMood();
+    std::vector<float> weights ((size_t) numFactory, 0.0f);
+    float totalWeight = 0.0f;
+    for (int i = 0; i < numFactory; ++i)
+    {
+        const auto& p = library.getPreset (i);
+        const auto siblings = library.presetsInCategory (p.category);
+        const auto inCategory = (int) std::distance (siblings.begin(), std::find (siblings.begin(), siblings.end(), i));
+        const auto moodOf = inCategory <= 2 ? 0 : inCategory <= 5 ? 1 : 2;
+        if (moodOf != mood || i == getPresetIndex())
+            continue;
+        const auto dist = std::min ({ std::abs (p.bpmHint - bpm), std::abs (p.bpmHint - 2.0 * bpm), std::abs (2.0 * p.bpmHint - bpm) });
+        const auto w = (float) std::exp (-(dist / 12.0) * (dist / 12.0)) + 0.03f;
+        weights[(size_t) i] = w;
+        totalWeight += w;
+    }
+
     auto preset = getPresetIndex();
-    while (preset == getPresetIndex() && numFactory > 1)
-        preset = rng.nextInt (numFactory);
+    if (totalWeight > 0.0f)
+    {
+        auto r = rng.nextFloat() * totalWeight;
+        for (int i = 0; i < numFactory; ++i)
+        {
+            if (r < weights[(size_t) i]) { preset = i; break; }
+            r -= weights[(size_t) i];
+        }
+    }
+
+    // slow projects get faster rolls, fast projects calmer ones; CRAZY pushes speed and variation
+    const auto slow = bpm < 118.0, fast = bpm > 158.0;
+    const auto faster = mood == 2 ? 0.45f : slow ? 0.45f : fast ? 0.1f : 0.25f;
+    const auto slower = mood == 0 ? 0.25f : fast ? 0.35f : slow ? 0.05f : 0.15f;
 
     // 96 presets x 99,999 seeds x speed x variation x velocity x swing x density
     // -> tens of millions of rolls, all built on presets that follow the kits
     apvts.state.removeChild (apvts.state.getChildWithName (kEditsType), nullptr);
     setParam (params::preset, (float) preset);
     setParam (params::seed, (float) rng.nextInt ({ 1, params::kMaxSeed + 1 }));
-    setParam (params::variation, (float) rng.nextInt ({ 30, 91 }));
-    setParam (params::rollSpeed, pick ({ { 1.0f, 0.6f }, { 2.0f, 0.25f }, { 0.0f, 0.15f } }));
+    setParam (params::variation, (float) (mood == 0 ? rng.nextInt ({ 20, 61 }) : mood == 2 ? rng.nextInt ({ 60, 101 }) : rng.nextInt ({ 35, 81 })));
+    setParam (params::rollSpeed, pick ({ { 1.0f, juce::jmax (0.1f, 1.0f - faster - slower) }, { 2.0f, faster }, { 0.0f, slower } }));
     setParam (params::velMode, pick ({ { 0.0f, 0.75f }, { 2.0f, 0.15f }, { 3.0f, 0.10f } }));
     setParam (params::swing, pick ({ { 0.0f, 0.7f }, { 10.0f, 0.15f }, { 20.0f, 0.15f } }));
     setParam (params::density, pick ({ { 100.0f, 0.8f }, { 80.0f, 0.1f }, { 125.0f, 0.1f } }));
     setParam (params::pitchRamp, pick ({ { 0.0f, 0.85f }, { 5.0f, 0.05f }, { 7.0f, 0.05f }, { -5.0f, 0.05f } }));
     rebuildPattern();
     commitUndoStep();
+
+    // remember it in the KILL history (newest last; going back and killing again drops the "future")
+    if (killHistoryPos >= 0 && killHistoryPos + 1 < (int) killHistory.size())
+        killHistory.erase (killHistory.begin() + killHistoryPos + 1, killHistory.end());
+    const auto& now = model.getPreset();
+    killHistory.push_back ({ apvts.copyState(), juce::String (getCategoryProfile (now.category).name) + " - " + now.name
+                                                    + "  #" + juce::String ((int) getSeed()) });
+    while ((int) killHistory.size() > kMaxKillHistory)
+        killHistory.erase (killHistory.begin());
+    killHistoryPos = (int) killHistory.size() - 1;
+}
+
+void RollsKillaProcessor::restoreKillHistory (int index)
+{
+    if (index < 0 || index >= (int) killHistory.size())
+        return;
+
+    // keep the user's tempo / mood / UI choices - only the roll comes back
+    const auto bpm = getTargetBpm();
+    const auto mood = getMood();
+    apvts.replaceState (killHistory[(size_t) index].state.createCopy());
+    apvts.state.setProperty ("targetBpm", bpm, nullptr);
+    apvts.state.setProperty ("mood", mood, nullptr);
+    killHistoryPos = index;
+    applyRestoredState();
+    commitUndoStep();
+}
+
+double RollsKillaProcessor::getTargetBpm() const
+{
+    return (double) apvts.state.getProperty ("targetBpm", 0.0);
+}
+
+void RollsKillaProcessor::setTargetBpm (double bpm)
+{
+    apvts.state.setProperty ("targetBpm", bpm <= 0.0 ? 0.0 : juce::jlimit (40.0, 240.0, bpm), nullptr);
+    previewBpm.store (getEffectiveBpm());
+}
+
+double RollsKillaProcessor::getEffectiveBpm() const
+{
+    const auto manual = getTargetBpm();
+    if (manual > 0.0)
+        return manual;
+    const auto host = hostBpm.load();
+    return host > 0.0 ? host : model.getPreset().bpmHint;
+}
+
+int RollsKillaProcessor::getMood() const
+{
+    return juce::jlimit (0, 2, (int) apvts.state.getProperty ("mood", 1));
+}
+
+void RollsKillaProcessor::setMood (int mood)
+{
+    apvts.state.setProperty ("mood", juce::jlimit (0, 2, mood), nullptr);
 }
 
 void RollsKillaProcessor::resetVariation()
@@ -331,7 +420,7 @@ juce::String RollsKillaProcessor::loadCustomSample (const juce::File& file)
 MidiExportOptions RollsKillaProcessor::getMidiExportOptions() const
 {
     MidiExportOptions o;
-    o.bpm = model.getPreset().bpmHint;
+    o.bpm = getEffectiveBpm();
     o.rootNote = kRootNote;
     o.trackName = "Rolls Killa - " + model.getPreset().name;
     return o;
@@ -400,6 +489,8 @@ void RollsKillaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
             transport.playing = hostIsPlaying;
             transport.ppq = pos->getPpqPosition().orFallback (0.0);
             transport.bpm = pos->getBpm().orFallback (120.0);
+            if (const auto bpm = pos->getBpm())
+                hostBpm.store (*bpm, std::memory_order_relaxed);
         }
     }
 
@@ -412,7 +503,8 @@ void RollsKillaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
             previewPpq = 0.0;
 
         transport.playing = true;
-        transport.bpm = pattern != nullptr ? pattern->bpmHint : 140.0;
+        const auto wanted = previewBpm.load (std::memory_order_relaxed);
+        transport.bpm = wanted > 0.0 ? wanted : (pattern != nullptr ? pattern->bpmHint : 140.0);
         transport.ppq = previewPpq;
         previewPpq += numSamples * transport.bpm / 60.0 / currentSampleRate;
     }

@@ -312,7 +312,7 @@ void KillButton::paintButton (juce::Graphics& g, bool highlighted, bool down)
     g.setColour (juce::Colour (0xff120203));
     g.fillPath (letters);
 
-    if (seedText.isNotEmpty())
+    if (seedText.isNotEmpty() && caption.isEmpty())
     {
         g.setColour (juce::Colours::black.withAlpha (0.55f));
         g.setFont (uiFont (11.0f));
