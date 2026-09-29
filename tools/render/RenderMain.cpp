@@ -413,6 +413,38 @@ int main (int argc, char* argv[])
             expectTrue (hp.getKillHistoryPosition() == (int) hist.size() - 1, "history position follows the click");
         }
 
+        // ---- open / close speed: the host must never wait on us ----
+        {
+            const auto t0 = juce::Time::getMillisecondCounterHiRes();
+            std::unique_ptr<juce::AudioProcessor> ob (createPluginFilter());
+            const auto t1 = juce::Time::getMillisecondCounterHiRes();
+            auto& op = dynamic_cast<RollsKillaProcessor&> (*ob);
+            double editorOpen = 0.0, editorClose = 0.0;
+            for (int i = 0; i < 3; ++i)
+            {
+                const auto e0 = juce::Time::getMillisecondCounterHiRes();
+                auto ed = std::make_unique<RollsKillaMiniEditor> (op);
+                const auto e1 = juce::Time::getMillisecondCounterHiRes();
+                ed.reset();
+                const auto e2 = juce::Time::getMillisecondCounterHiRes();
+                editorOpen = juce::jmax (editorOpen, e1 - e0);
+                editorClose = juce::jmax (editorClose, e2 - e1);
+            }
+            for (int i = 0; i < 200; ++i)        // long session: lots of KILLs
+                op.killEverything();
+            juce::MemoryBlock savedState;
+            const auto s0 = juce::Time::getMillisecondCounterHiRes();
+            op.getStateInformation (savedState);
+            const auto s1 = juce::Time::getMillisecondCounterHiRes();
+            ob.reset();
+            const auto t2 = juce::Time::getMillisecondCounterHiRes();
+            std::cout << "     open plugin " << juce::roundToInt (t1 - t0) << " ms, open window " << juce::roundToInt (editorOpen)
+                      << " ms, close window " << juce::roundToInt (editorClose) << " ms, save " << juce::roundToInt (s1 - s0)
+                      << " ms (" << (int) savedState.getSize() << " bytes), close plugin after 200 KILLs " << juce::roundToInt (t2 - s1) << " ms" << std::endl;
+            expectTrue (t1 - t0 < 1000.0 && editorOpen < 500.0, "plugin and window open fast");
+            expectTrue (editorClose < 100.0 && t2 - s1 < 200.0 && s1 - s0 < 100.0, "window, save and plugin close fast (also after a long session)");
+        }
+
         // ---- Mini window: SPACE plays/stops the plugin only (the key is consumed) ----
         {
             std::unique_ptr<juce::AudioProcessor> kb (createPluginFilter());

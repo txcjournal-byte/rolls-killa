@@ -47,6 +47,7 @@ private:
 
     RollsKillaProcessor& proc;
     rk::ui::KillaLookAndFeel lookAndFeel;
+    juce::SharedResourcePointer<rk::ui::skin::SharedImages> skinImages;   // freed with the last open window
     Content content { *this };
     float uiScale = 1.0f;
 

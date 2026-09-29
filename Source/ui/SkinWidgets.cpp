@@ -23,7 +23,7 @@ namespace
 
     juce::Image load (const void* data, int size)
     {
-        return juce::ImageCache::getFromMemory (data, size);
+        return juce::ImageFileFormat::loadFrom (data, (size_t) size);   // no global ImageCache copy
     }
 
     void drawSprite (juce::Graphics& g, const juce::Image& img, juce::Rectangle<float> r)
@@ -32,24 +32,29 @@ namespace
     }
 }
 
+/*  The skin images live only while a Mini window is open (the editor holds a SharedImages).
+    Never keep juce::Images in a static: on Windows they would be freed while the DLL unloads,
+    after the graphics system (Direct2D) is gone - that can freeze the host when it quits. */
+SharedImages::SharedImages()
+{
+    auto& i = images_;
+    i.plate      = load (MiniSkin::plate_jpg, MiniSkin::plate_jpgSize);
+    i.ring       = load (MiniSkin::ring_png, MiniSkin::ring_pngSize);
+    i.lampOn     = load (MiniSkin::lamp_on_png, MiniSkin::lamp_on_pngSize);
+    i.lampOff    = load (MiniSkin::lamp_off_png, MiniSkin::lamp_off_pngSize);
+    i.dotOn      = load (MiniSkin::dot_on_png, MiniSkin::dot_on_pngSize);
+    i.dotOff     = load (MiniSkin::dot_off_png, MiniSkin::dot_off_pngSize);
+    i.moodOn     = load (MiniSkin::mood_on_png, MiniSkin::mood_on_pngSize);
+    i.moodOff    = load (MiniSkin::mood_off_png, MiniSkin::mood_off_pngSize);
+    i.toggleMidi = load (MiniSkin::toggle_midi_png, MiniSkin::toggle_midi_pngSize);
+    i.toggleHost = load (MiniSkin::toggle_host_png, MiniSkin::toggle_host_pngSize);
+}
+
 const Images& images()
 {
-    static const Images imgs = []
-    {
-        Images i;
-        i.plate      = load (MiniSkin::plate_jpg, MiniSkin::plate_jpgSize);
-        i.ring       = load (MiniSkin::ring_png, MiniSkin::ring_pngSize);
-        i.lampOn     = load (MiniSkin::lamp_on_png, MiniSkin::lamp_on_pngSize);
-        i.lampOff    = load (MiniSkin::lamp_off_png, MiniSkin::lamp_off_pngSize);
-        i.dotOn      = load (MiniSkin::dot_on_png, MiniSkin::dot_on_pngSize);
-        i.dotOff     = load (MiniSkin::dot_off_png, MiniSkin::dot_off_pngSize);
-        i.moodOn     = load (MiniSkin::mood_on_png, MiniSkin::mood_on_pngSize);
-        i.moodOff    = load (MiniSkin::mood_off_png, MiniSkin::mood_off_pngSize);
-        i.toggleMidi = load (MiniSkin::toggle_midi_png, MiniSkin::toggle_midi_pngSize);
-        i.toggleHost = load (MiniSkin::toggle_host_png, MiniSkin::toggle_host_pngSize);
-        return i;
-    }();
-    return imgs;
+    // the editor keeps the shared instance alive, so this finds the loaded one (no reload)
+    const juce::SharedResourcePointer<SharedImages> shared;
+    return shared->get();
 }
 
 void drawPressOverlay (juce::Graphics& g, juce::Rectangle<float> r, float corner, bool highlighted, bool down, bool enabled)

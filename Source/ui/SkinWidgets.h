@@ -18,6 +18,18 @@ struct Images
     juce::Image plate, ring, lampOn, lampOff, dotOn, dotOff, moodOn, moodOff, toggleMidi, toggleHost;
 };
 
+/** Loaded once per open window; hold a juce::SharedResourcePointer<SharedImages> while painting. */
+class SharedImages
+{
+public:
+    SharedImages();
+    const Images& get() const noexcept { return images_; }
+
+private:
+    Images images_;
+};
+
+/** The images of the open Mini window (valid while a SharedResourcePointer<SharedImages> exists). */
 const Images& images();
 
 constexpr float kPx = 600.0f / 2000.0f;

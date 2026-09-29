@@ -127,6 +127,7 @@ RollsKillaMiniEditor::RollsKillaMiniEditor (RollsKillaProcessor& p)
 RollsKillaMiniEditor::~RollsKillaMiniEditor()
 {
     stopTimer();
+    juce::PopupMenu::dismissAllActiveMenus();   // a menu left open must not outlive the window
     setLookAndFeel (nullptr);
 }
 
