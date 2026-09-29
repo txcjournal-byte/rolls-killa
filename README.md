@@ -13,15 +13,17 @@ z vestavěného sampleru, nebo ho přetáhneš jako MIDI do projektu.
 
 ## Rolls Killa Mini
 
-Druhý plugin ve stejném projektu (`Rolls Killa Mini.vst3`): jedna malá kovová cedulka podle
-`docs/design/mini_metal.webp` – „malinký nástroj, který zvládne milion věcí“.
+Druhý plugin ve stejném projektu (`Rolls Killa Mini.vst3`): jedna malá kovová cedulka – „malinký nástroj,
+který zvládne milion věcí“. Vzhled je přímo schválený obrázek `docs/design/mini_metal.webp`
+(`tools/mini_skin/make_skin.py` z něj připraví `Resources/MiniSkin/`: vyčištěná deska + pohyblivé části),
+plugin přes něj kreslí jen to, co se hýbe. Okno nebere klávesnici, takže ve FL dál funguje mezerník (Play) atd.
 Výchozí velikost 125 % (~750 × 275 px), pravý klik na horní část = 100–200 %.
 Instaluje se stejně (GitHub Actions artefakt `RollsKillaMini-Windows-VST3`).
 
 | Ovládání | Co dělá |
 |---|---|
 | **BPM** (oranžový displej) | **AUTO** = tempo z DAW, KILL vybírá rolly, které na něj sedí. Tažení nahoru/dolů = vlastní tempo (**SET**), dvojklik = zpět AUTO. Tečka vpravo bliká do doby, když DAW hraje |
-| **↶ ↷** | undo/redo (↶ vrátí předchozí KILL), Ctrl+Z / Ctrl+Shift+Z |
+| **↶ ↷** | undo/redo (↶ vrátí předchozí KILL) |
 | **BARS 1 2 4 8** | délka patternu |
 | okénko s rollem | živý pattern; klik na notu = mute, tažení = velocity, dvojklik na roll = rychlost, pravý klik = smazat |
 | **8 světýlek** | posledních 8 KILLů, klik = návrat k tomu rollu |

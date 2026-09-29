@@ -45,6 +45,22 @@ juce_add_binary_data(RollsKillaSampleData
     NAMESPACE SampleData
     SOURCES ${ROLLSKILLA_SAMPLE_FILES} Resources/Samples/README.txt)
 
+# Rolls Killa Mini skin (made by tools/mini_skin/make_skin.py from docs/design/mini_metal.webp)
+juce_add_binary_data(RollsKillaMiniSkin
+    HEADER_NAME MiniSkin.h
+    NAMESPACE MiniSkin
+    SOURCES
+        Resources/MiniSkin/plate.jpg
+        Resources/MiniSkin/ring.png
+        Resources/MiniSkin/lamp_on.png
+        Resources/MiniSkin/lamp_off.png
+        Resources/MiniSkin/dot_on.png
+        Resources/MiniSkin/dot_off.png
+        Resources/MiniSkin/mood_on.png
+        Resources/MiniSkin/mood_off.png
+        Resources/MiniSkin/toggle_midi.png
+        Resources/MiniSkin/toggle_host.png)
+
 # ---------------------------------------------------------------------------
 # Engine sources (no GUI) - shared by the plugin and the test runner
 # ---------------------------------------------------------------------------
@@ -100,10 +116,18 @@ set(ROLLSKILLA_PLUGIN_SOURCES
     Source/ui/Sigils.cpp
     Source/ui/Widgets.cpp
     Source/ui/MetalWidgets.cpp
+    Source/ui/SkinWidgets.cpp
     ${ROLLSKILLA_ENGINE_SOURCES}
 )
 
 function(rollskilla_add_plugin target code name bundle description mini)
+    # The Mini window never takes the keyboard, so the DAW keeps its shortcuts (space = play).
+    if(mini)
+        set(wants_keyboard FALSE)
+    else()
+        set(wants_keyboard TRUE)
+    endif()
+
     juce_add_plugin(${target}
         COMPANY_NAME                "Killa"
         COMPANY_WEBSITE             ""
@@ -117,7 +141,7 @@ function(rollskilla_add_plugin target code name bundle description mini)
         NEEDS_MIDI_INPUT            TRUE
         NEEDS_MIDI_OUTPUT           TRUE
         IS_MIDI_EFFECT              FALSE
-        EDITOR_WANTS_KEYBOARD_FOCUS TRUE
+        EDITOR_WANTS_KEYBOARD_FOCUS ${wants_keyboard}
         COPY_PLUGIN_AFTER_BUILD     FALSE
         VST3_CATEGORIES             Instrument Drum Generator
         AU_MAIN_TYPE                kAudioUnitType_MusicDevice
@@ -131,6 +155,7 @@ function(rollskilla_add_plugin target code name bundle description mini)
         PRIVATE
             RollsKillaPresetData
             RollsKillaSampleData
+            RollsKillaMiniSkin
             ${ROLLSKILLA_ENGINE_MODULES}
             juce::juce_audio_utils
             juce::juce_audio_processors

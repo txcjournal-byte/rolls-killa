@@ -2,13 +2,14 @@
 
 #include "PluginProcessor.h"
 #include "ui/KillaLookAndFeel.h"
-#include "ui/MetalWidgets.h"
 #include "ui/RollVisualizer.h"
+#include "ui/SkinWidgets.h"
 
 /**
-    Rolls Killa Mini: one small plate of scratched steel (docs/design/mini_metal.webp) -
+    Rolls Killa Mini: the approved metal plate picture (docs/design/mini_metal.webp) is the face -
     BPM (follows the DAW), undo/redo, BARS, the roll window, KILL history lights,
     CHILL/TRAP/CRAZY + KILL, hi-hat, the blunt (PUFF smoke FX), DRAG TO DAW and PLAY.
+    The window never takes the keyboard, so the DAW's shortcuts (space = play) keep working.
     Same processor and engine as Rolls Killa.
 */
 class RollsKillaMiniEditor : public juce::AudioProcessorEditor,
@@ -21,7 +22,6 @@ public:
 
     void paint (juce::Graphics&) override {}
     void resized() override;
-    bool keyPressed (const juce::KeyPress&) override;
 
     static constexpr int kBaseWidth = 600;
     static constexpr int kBaseHeight = 220;
@@ -45,22 +45,20 @@ private:
     RollsKillaProcessor& proc;
     rk::ui::KillaLookAndFeel lookAndFeel;
     Content content { *this };
-    juce::Image steel;
-    float steelScale = 0.0f;
     float uiScale = 1.0f;
 
     rk::ui::RollVisualizer visualizer;
-    rk::ui::metal::BpmLcd bpm { proc };
-    rk::ui::metal::MetalButton undoButton { "Undo", rk::ui::Icon::undo }, redoButton { "Redo", rk::ui::Icon::redo };
-    rk::ui::metal::BarsLamps bars;
-    rk::ui::metal::HistoryLeds history { proc };
-    rk::ui::metal::MoodSwitch mood;
-    rk::ui::metal::MetalKillButton killButton;
-    rk::ui::metal::HatPicker hatPicker;
-    rk::ui::metal::BluntSlider blunt;
-    rk::ui::metal::DragDawButton dragButton;
-    rk::ui::metal::RoundPlayButton playButton;
-    rk::ui::metal::ModeToggle playMode;
+    rk::ui::skin::SkinBpm bpm { proc };
+    rk::ui::skin::SkinButton undoButton { "Undo" }, redoButton { "Redo" };
+    rk::ui::skin::SkinBars bars;
+    rk::ui::skin::SkinHistory history { proc };
+    rk::ui::skin::SkinMood mood;
+    rk::ui::skin::SkinKillButton killButton;
+    rk::ui::skin::SkinHat hatPicker;
+    rk::ui::skin::SkinBlunt blunt;
+    rk::ui::skin::SkinDragButton dragButton;
+    rk::ui::skin::SkinPlayButton playButton;
+    rk::ui::skin::SkinToggle playMode;
     rk::ui::metal::SmokeOverlay smoke;
     juce::TooltipWindow tooltips { this, 600 };
 

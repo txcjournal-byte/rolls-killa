@@ -4,29 +4,26 @@
 
 using namespace rk;
 using namespace rk::ui;
-using namespace rk::ui::metal;
+using skin::design;
 
 namespace
 {
-    // Layout at 100 % (matches docs/design/mini_metal.webp)
-    const juce::Rectangle<float> kPlate      { 1.0f, 1.0f, 598.0f, 218.0f };
-    const juce::Rectangle<float> kLogo       { 26.0f, 11.0f, 212.0f, 37.0f };
-    const juce::Rectangle<int>   kBpm        { 318, 17, 78, 40 };
-    const juce::Rectangle<int>   kUndo       { 404, 23, 29, 29 };
-    const juce::Rectangle<int>   kRedo       { 437, 23, 29, 29 };
-    const juce::Rectangle<int>   kBars       { 480, 14, 106, 44 };
-    const juce::Rectangle<float> kSlot       { 16.0f, 64.0f, 568.0f, 42.0f };
-    const juce::Rectangle<float> kPresetLine { 22.0f, 108.0f, 230.0f, 11.0f };
-    const juce::Rectangle<int>   kHistory    { 256, 107, 104, 12 };
-    const juce::Rectangle<int>   kMood       { 14, 118, 100, 22 };
-    const juce::Rectangle<int>   kKill       { 22, 142, 84, 44 };
-    const juce::Rectangle<int>   kHat        { 124, 132, 90, 54 };
-    const juce::Rectangle<int>   kBlunt      { 224, 118, 254, 74 };
-    const juce::Rectangle<int>   kDrag       { 492, 138, 40, 40 };
-    const juce::Rectangle<int>   kPlay       { 545, 115, 48, 52 };
-    const juce::Rectangle<int>   kMode       { 543, 170, 52, 24 };
-    const juce::Rectangle<int>   kSmoke      { 404, 96, 120, 96 };
-    const float kGrooves[] { 118.0f, 219.0f, 484.0f, 540.0f };
+    // Layout: the skin picture is 2000 x 733 design pixels = 600 x 220 points (see ui/SkinWidgets.h)
+    const juce::Rectangle<float> kSlot       = design (62, 222, 1942, 342);
+    const juce::Rectangle<float> kPresetLine = design (74, 348, 820, 372);
+    const juce::Rectangle<float> kBpm        = design (1090, 90, 1296, 176);
+    const juce::Rectangle<float> kUndo       = design (1340, 95, 1426, 181);
+    const juce::Rectangle<float> kRedo       = design (1452, 95, 1538, 181);
+    const juce::Rectangle<float> kBars       = design (1592, 118, 1912, 190);
+    const juce::Rectangle<float> kHistory    = design (846, 360, 1178, 396);
+    const juce::Rectangle<float> kMood       = design (76, 404, 350, 448);
+    const juce::Rectangle<float> kKill       = design (95, 455, 312, 602);
+    const juce::Rectangle<float> kHat        = design (380, 450, 695, 608);
+    const juce::Rectangle<float> kBlunt      = design (740, 405, 1585, 590);
+    const juce::Rectangle<float> kDrag       = design (1626, 468, 1760, 584);
+    const juce::Rectangle<float> kPlay       = design (1818, 442, 1936, 560);
+    const juce::Rectangle<float> kMode       = design (1816, 594, 1922, 626);
+    const juce::Rectangle<float> kSmoke      = design (1380, 230, 1720, 560);
 
     constexpr const char* kMiniScaleProp = "miniUiScale";
 }
@@ -34,98 +31,16 @@ namespace
 //==============================================================================
 void RollsKillaMiniEditor::Content::paint (juce::Graphics& g)
 {
-    auto& ed = editor;
     g.fillAll (juce::Colour (0xff070707));
+    g.drawImage (skin::images().plate, getLocalBounds().toFloat(), juce::RectanglePlacement::stretchToFit);
 
-    // the plate
-    const auto scale = (float) g.getInternalContext().getPhysicalPixelScaleFactor();
-    if (ed.steel.isNull() || std::abs (ed.steelScale - scale) > 0.01f)
-    {
-        ed.steelScale = scale;
-        ed.steel = renderSteel (kBaseWidth, kBaseHeight, juce::jmin (scale, 3.0f));
-    }
-    {
-        juce::Graphics::ScopedSaveState save (g);
-        juce::Path plate;
-        plate.addRoundedRectangle (kPlate, 7.0f);
-        g.reduceClipRegion (plate);
-        g.drawImage (ed.steel, juce::Rectangle<float> (0.0f, 0.0f, (float) kBaseWidth, (float) kBaseHeight));
-    }
-    g.setColour (juce::Colours::white.withAlpha (0.25f));
-    g.drawRoundedRectangle (kPlate.reduced (1.2f), 6.0f, 0.8f);
-    g.setColour (juce::Colours::black.withAlpha (0.9f));
-    g.drawRoundedRectangle (kPlate, 7.0f, 1.2f);
-
-    drawScrew (g, { 12.0f, 12.0f }, 5.5f, 0.4f);
-    drawScrew (g, { 588.0f, 12.0f }, 5.5f, 1.1f);
-    drawScrew (g, { 12.0f, 208.0f }, 5.5f, 0.9f);
-    drawScrew (g, { 588.0f, 208.0f }, 5.5f, 0.2f);
-
-    // stamped logo
-    juce::GlyphArrangement ga;
-    ga.addLineOfText (juce::Font (juce::FontOptions (40.0f, juce::Font::bold)).withHorizontalScale (0.78f).withExtraKerningFactor (-0.02f),
-                      "ROLLS KILLA", 0.0f, 0.0f);
-    juce::Path logo;
-    ga.createPath (logo);
-    logo.applyTransform (juce::AffineTransform::shear (-0.16f, 0.0f));
-    logo.applyTransform (logo.getTransformToScaleToFit (kLogo, true, juce::Justification::centredLeft));
-    const auto logoBounds = logo.getBounds();
-    g.setColour (juce::Colours::white.withAlpha (0.35f));
-    g.fillPath (logo, juce::AffineTransform::translation (0.0f, 1.1f));
-    g.strokePath (logo, juce::PathStrokeType (1.4f), juce::AffineTransform::translation (0.0f, 1.1f));
-    g.setGradientFill (juce::ColourGradient (juce::Colour (0xff2e2e2c), 0.0f, logoBounds.getY(), juce::Colour (0xff0e0e0e), 0.0f, logoBounds.getBottom(), false));
-    g.fillPath (logo);
-    g.strokePath (logo, juce::PathStrokeType (1.4f));
-    {
-        juce::Graphics::ScopedSaveState save (g);
-        g.reduceClipRegion (logo);
-        g.setOpacity (0.22f);
-        g.drawImage (ed.steel, juce::Rectangle<float> (0.0f, 0.0f, (float) kBaseWidth, (float) kBaseHeight));
-    }
-
-    // MINI badge
-    const auto badge = juce::Rectangle<float> (logoBounds.getRight() + 5.0f, logoBounds.getBottom() - 15.0f, 36.0f, 13.0f);
-    g.setColour (juce::Colours::white.withAlpha (0.25f));
-    g.fillRoundedRectangle (badge.translated (0.0f, 0.8f), 2.0f);
-    g.setColour (juce::Colour (0xff161615));
-    g.fillRoundedRectangle (badge, 2.0f);
-    {
-        juce::GlyphArrangement mg;
-        mg.addFittedText (plateFont (10.0f, 0.08f), "MINI", badge.getX(), badge.getY(), badge.getWidth(), badge.getHeight(),
-                          juce::Justification::centred, 1);
-        juce::Path mini;
-        mg.createPath (mini);
-        mini.applyTransform (juce::AffineTransform::shear (-0.18f, 0.0f).translated (badge.getCentreY() * 0.18f, 0.0f));
-        g.setColour (juce::Colour (0xffb8b8b2));
-        g.fillPath (mini);
-    }
-
-    drawEngravedText (g, "TRAP HI-HAT ROLLS GENERATOR", plateFont (7.6f, 0.62f), { 28.0f, 49.0f, 280.0f, 11.0f },
-                      juce::Justification::centredLeft);
-
-    drawGroove (g, 308.0f, 15.0f, 58.0f);
-    drawGroove (g, 474.0f, 15.0f, 58.0f);
-
-    // roll window
-    drawRecess (g, kSlot, 4.0f);
-    drawEngravedText (g, ed.shownPresetLine, plateFont (7.0f, 0.12f), kPresetLine, juce::Justification::centredLeft, 0.85f);
-
-    // bottom row
-    for (auto x : kGrooves)
-        drawGroove (g, x, 121.0f, 206.0f);
-    drawEngravedText (g, "MILLIONS OF COMBINATIONS", plateFont (6.4f, 0.04f), { 12.0f, 188.0f, 104.0f, 10.0f }, juce::Justification::centred);
-    drawEngravedText (g, "HI-HAT SAMPLE", plateFont (8.0f, 0.06f), { 122.0f, 118.0f, 94.0f, 12.0f }, juce::Justification::centred);
-    drawEngravedText (g, "DRAG TO DAW", plateFont (7.4f, 0.02f), { 484.0f, 120.0f, 56.0f, 12.0f }, juce::Justification::centred);
-
-    const auto smokeY = 199.0f;
-    drawEngravedText (g, "SMOKE  FX", plateFont (8.0f, 0.3f), { 310.0f, smokeY - 5.0f, 80.0f, 10.0f }, juce::Justification::centred);
-    for (auto seg : { juce::Range<float> (262.0f, 308.0f), juce::Range<float> (392.0f, 438.0f) })
-    {
-        g.setColour (juce::Colours::black.withAlpha (0.6f));
-        g.fillRect (juce::Rectangle<float> (seg.getStart(), smokeY - 0.6f, seg.getLength(), 1.0f));
-        g.setColour (juce::Colours::white.withAlpha (0.2f));
-        g.fillRect (juce::Rectangle<float> (seg.getStart(), smokeY + 0.5f, seg.getLength(), 0.7f));
-    }
+    // what plays now, stamped small under the roll window
+    const auto& line = editor.shownPresetLine;
+    g.setFont (metal::plateFont (7.0f, 0.12f));
+    g.setColour (juce::Colours::white.withAlpha (0.28f));
+    g.drawText (line, kPresetLine.translated (0.0f, 0.6f), juce::Justification::centredLeft, true);
+    g.setColour (juce::Colour (0xff141414).withAlpha (0.9f));
+    g.drawText (line, kPresetLine, juce::Justification::centredLeft, true);
 }
 
 void RollsKillaMiniEditor::Content::mouseDown (const juce::MouseEvent& e)
@@ -148,6 +63,7 @@ RollsKillaMiniEditor::RollsKillaMiniEditor (RollsKillaProcessor& p)
     addAndMakeVisible (content);
 
     visualizer.setEmberStyle (true);
+    smoke.drawGlow = false;   // the ember glow belongs to the blunt
     for (auto* c : std::initializer_list<juce::Component*> { &visualizer, &bpm, &undoButton, &redoButton, &bars, &history, &mood,
                                                               &killButton, &hatPicker, &blunt, &dragButton, &playButton, &playMode, &smoke })
         content.addAndMakeVisible (c);
@@ -160,8 +76,8 @@ RollsKillaMiniEditor::RollsKillaMiniEditor (RollsKillaProcessor& p)
     mood.setTooltip ("What KILL picks: CHILL = simple rolls, TRAP = classic, CRAZY = the wildest");
     mood.onChange = [this] (int m) { proc.setMood (m); };
 
-    undoButton.setTooltip ("Undo - e.g. back to the previous KILL (Ctrl+Z)");
-    redoButton.setTooltip ("Redo (Ctrl+Shift+Z)");
+    undoButton.setTooltip ("Undo - e.g. back to the previous KILL");
+    redoButton.setTooltip ("Redo");
     undoButton.onClick = [this] { proc.undo(); updateStatus(); };
     redoButton.onClick = [this] { proc.redo(); updateStatus(); };
 
@@ -185,12 +101,22 @@ RollsKillaMiniEditor::RollsKillaMiniEditor (RollsKillaProcessor& p)
     playMode.setTooltip ("MIDI: plays only while a note is held on this channel. HOST: plays whenever the DAW plays.");
 
     uiScale = (float) (double) proc.getState().state.getProperty (kMiniScaleProp, 1.25);  // 125 % default: small but readable
-    setWantsKeyboardFocus (true);
+
+    // never take the keyboard (also not by clicking a button): space, Ctrl+Z etc. stay with the DAW
+    std::function<void (juce::Component&)> noKeyboard = [&noKeyboard] (juce::Component& c)
+    {
+        c.setWantsKeyboardFocus (false);
+        c.setMouseClickGrabsKeyboardFocus (false);
+        for (auto* child : c.getChildren())
+            noKeyboard (*child);
+    };
+    noKeyboard (*this);
+
     layout();
     setUiScale (uiScale);
     updateStatus();
 
-    // the blunt is already burning when the window opens
+    // the blunt is already smoking when the window opens
     for (int i = 0; i < 75; ++i)
         smoke.tick (1.0f / 30.0f, blunt.getValue(), 0.5f,
                     blunt.getEmberTip() + blunt.getPosition().toFloat() - smoke.getPosition().toFloat());
@@ -205,20 +131,20 @@ RollsKillaMiniEditor::~RollsKillaMiniEditor()
 
 void RollsKillaMiniEditor::layout()
 {
-    visualizer.setBounds (kSlot.reduced (3.0f).toNearestInt());
-    bpm.setBounds (kBpm);
-    undoButton.setBounds (kUndo);
-    redoButton.setBounds (kRedo);
-    bars.setBounds (kBars);
-    history.setBounds (kHistory);
-    mood.setBounds (kMood);
-    killButton.setBounds (kKill);
-    hatPicker.setBounds (kHat);
-    blunt.setBounds (kBlunt);
-    dragButton.setBounds (kDrag);
-    playButton.setBounds (kPlay);
-    playMode.setBounds (kMode);
-    smoke.setBounds (kSmoke);
+    visualizer.setBounds (kSlot.toNearestInt());
+    bpm.setBounds (kBpm.toNearestInt());
+    undoButton.setBounds (kUndo.toNearestInt());
+    redoButton.setBounds (kRedo.toNearestInt());
+    bars.setBounds (kBars.toNearestInt());
+    history.setBounds (kHistory.toNearestInt());
+    mood.setBounds (kMood.toNearestInt());
+    killButton.setBounds (kKill.toNearestInt());
+    hatPicker.setBounds (kHat.toNearestInt());
+    blunt.setBounds (kBlunt.toNearestInt());
+    dragButton.setBounds (kDrag.toNearestInt());
+    playButton.setBounds (kPlay.toNearestInt());
+    playMode.setBounds (kMode.toNearestInt());
+    smoke.setBounds (kSmoke.toNearestInt());
 }
 
 void RollsKillaMiniEditor::setUiScale (float scale)
@@ -293,16 +219,4 @@ void RollsKillaMiniEditor::timerCallback()
 
     if (++frame % 2 == 0)
         updateStatus();
-}
-
-bool RollsKillaMiniEditor::keyPressed (const juce::KeyPress& key)
-{
-    const auto cmd = key.getModifiers().isCommandDown();
-    if (cmd && key.getKeyCode() == 'Z')
-    {
-        key.getModifiers().isShiftDown() ? proc.redo() : proc.undo();
-        updateStatus();
-        return true;
-    }
-    return false;
 }

@@ -45,7 +45,7 @@ public:
     MetalButton (const juce::String& name, Icon icon);
     void paintButton (juce::Graphics&, bool highlighted, bool down) override;
 
-private:
+protected:
     Icon icon;
 };
 
@@ -58,7 +58,7 @@ public:
     void paint (juce::Graphics&) override;
     void mouseUp (const juce::MouseEvent&) override;
 
-private:
+protected:
     juce::Rectangle<float> lamp (int i) const;
     juce::RangedAudioParameter& param;
     juce::ParameterAttachment attachment;
@@ -77,8 +77,8 @@ public:
     void setMood (int m) { if (m != mood) { mood = m; repaint(); } }
     std::function<void (int)> onChange;
 
-private:
-    float slotX (int i) const;
+protected:
+    virtual float slotX (int i) const;
     int mood = 1;
 };
 
@@ -96,6 +96,7 @@ class WaveWindow : public WaveformView, public juce::SettableTooltipClient
 {
 public:
     void paint (juce::Graphics&) override;
+    bool bare = false;   // only the wave (the window is part of the skin picture)
 };
 
 /** < waveform > + the hat's name on a small plate (click = list). */
@@ -111,8 +112,8 @@ public:
     WaveWindow wave;
     std::function<void()> onChange;
 
-private:
-    juce::Rectangle<int> namePlate() const;
+protected:
+    virtual juce::Rectangle<int> namePlate() const;
     void step (int delta);
 
     MetalButton prev { "prev", Icon::prev }, next { "next", Icon::next };
@@ -148,7 +149,7 @@ public:
     void paint (juce::Graphics&) override;
     void mouseUp (const juce::MouseEvent&) override;
 
-private:
+protected:
     juce::RangedAudioParameter& param;
     juce::ParameterAttachment attachment;
     int mode = 0;
@@ -166,7 +167,7 @@ public:
     void mouseDrag (const juce::MouseEvent&) override;
     void mouseDoubleClick (const juce::MouseEvent&) override;
 
-private:
+protected:
     RollsKillaProcessor& proc;
     double startBpm = 140.0;
 };
@@ -182,8 +183,8 @@ public:
     void mouseExit (const juce::MouseEvent&) override;
     void mouseUp (const juce::MouseEvent&) override;
 
-private:
-    juce::Rectangle<float> dot (int i) const;
+protected:
+    virtual juce::Rectangle<float> dot (int i) const;
     RollsKillaProcessor& proc;
     int hover = -1;
 };
@@ -208,13 +209,13 @@ public:
     void setGlow (float g);
     float getValue() const noexcept { return value; }
     /** Where the smoke comes out, in this component's coordinates. */
-    juce::Point<float> getEmberTip() const;
+    virtual juce::Point<float> getEmberTip() const;
 
-private:
-    juce::Rectangle<float> body() const;
-    juce::Rectangle<float> track() const;
+protected:
+    virtual juce::Rectangle<float> body() const;
+    virtual juce::Rectangle<float> track() const;
     float handleX() const;
-    float valueAt (juce::Point<float> p) const;
+    virtual float valueAt (juce::Point<float> p) const;
     void paintBlunt (juce::Graphics&, juce::Rectangle<float> b, float heat);
 
     juce::RangedAudioParameter& param;
@@ -233,8 +234,9 @@ public:
     void paint (juce::Graphics&) override;
     /** Advance the particles; 'origin' in this component's coordinates. */
     void tick (float dtSeconds, float amount, float glow, juce::Point<float> origin);
+    bool drawGlow = true;   // orange halo around the origin
 
-private:
+protected:
     struct Puff { float x, y, vx, vy, age, life, size, phase; };
     std::array<Puff, 48> puffs {};
     int count = 0;

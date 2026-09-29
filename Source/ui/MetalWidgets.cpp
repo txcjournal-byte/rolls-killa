@@ -342,7 +342,8 @@ void MetalKillButton::paintButton (juce::Graphics& g, bool highlighted, bool dow
 void WaveWindow::paint (juce::Graphics& g)
 {
     auto r = getLocalBounds().toFloat().reduced (1.0f);
-    drawRecess (g, r, 2.5f);
+    if (! bare)
+        drawRecess (g, r, 2.5f);
     if (dragOver)
     {
         g.setColour (colours::ember.withAlpha (0.8f));
@@ -1015,7 +1016,7 @@ void SmokeOverlay::tick (float dt, float amount, float glow, juce::Point<float> 
 
 void SmokeOverlay::paint (juce::Graphics& g)
 {
-    if (glowAmount > 0.0f)
+    if (glowAmount > 0.0f && drawGlow)
     {
         g.setGradientFill (juce::ColourGradient (colours::ember.withAlpha (0.55f * glowAmount), glowAt,
                                                  colours::ember.withAlpha (0.0f), glowAt.translated (22.0f + 16.0f * glowAmount, 0.0f), true));

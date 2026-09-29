@@ -199,6 +199,20 @@ void RollVisualizer::paint (juce::Graphics& g)
                     juce::Justification::centred, false);
     }
 
+    // ember look: dim grey "ghost" bars on every 1/16 slot (like an unlit LED meter)
+    if (ember)
+    {
+        const auto slotW = area.getWidth() / (float) juce::jmax (1.0, len * 4.0);
+        juce::Random ghostRng (5);
+        for (int step = 0; step < (int) (len * 4); ++step)
+        {
+            const auto x = beatToX (step * 0.25);
+            const auto h = area.getHeight() * (0.28f + 0.3f * ghostRng.nextFloat());
+            g.setColour (juce::Colour (0xff3a302a));
+            g.fillRect (juce::Rectangle<float> (x - slotW * 0.14f, area.getBottom() - h, slotW * 0.28f, h));
+        }
+    }
+
     // roll clusters glow
     int currentRoll = -2;
     double rollStart = 0.0;
@@ -255,6 +269,16 @@ void RollVisualizer::paint (juce::Graphics& g)
             continue;
         }
 
+        if (ember)
+        {
+            // every lit bar glows a little, like the LEDs in the design
+            g.setColour (colour.withAlpha (0.22f));
+            g.fillRect (bar.expanded (1.2f, 1.0f));
+            g.setGradientFill (juce::ColourGradient (colour.withAlpha (0.18f), bar.getCentreX(), bar.getY(),
+                                                     colour.withAlpha (0.0f), bar.getCentreX(), bar.getY() - 6.0f, false));
+            g.fillRect (juce::Rectangle<float> (bar.getX() - 1.0f, bar.getY() - 6.0f, bar.getWidth() + 2.0f, 6.0f));
+        }
+
         if (hot > 0.0f)
         {
             g.setColour (colour.withAlpha (0.25f * hot));
@@ -262,8 +286,8 @@ void RollVisualizer::paint (juce::Graphics& g)
             colour = colour.interpolatedWith (juce::Colours::white, 0.45f * hot);
         }
 
-        g.setGradientFill (juce::ColourGradient (colour, bar.getX(), bar.getY(), colour.withMultipliedBrightness (0.55f),
-                                                 bar.getX(), bar.getBottom(), false));
+        g.setGradientFill (juce::ColourGradient (ember ? colour.brighter (0.35f) : colour, bar.getX(), bar.getY(),
+                                                 colour.withMultipliedBrightness (ember ? 0.75f : 0.55f), bar.getX(), bar.getBottom(), false));
         g.fillRect (bar);
 
         if ((int) i == hoverNote)
