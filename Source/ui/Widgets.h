@@ -103,7 +103,7 @@ public:
     void mouseDrag (const juce::MouseEvent&) override;
     void mouseUp (const juce::MouseEvent&) override { dragging = false; repaint(); }
 
-private:
+protected:
     bool dragging = false;
 };
 
@@ -121,7 +121,7 @@ public:
 
     std::function<void (const juce::File&)> onFileDropped;
 
-private:
+protected:
     std::shared_ptr<const HatSample> sample;
     bool dragOver = false;
 };

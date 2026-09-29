@@ -13,8 +13,31 @@ namespace
     constexpr int kBarsSelectorW = 146;
 }
 
-float RollVisualizer::headerH() const noexcept { return compact ? kHeaderCompact : kHeaderFull; }
-float RollVisualizer::footerH() const noexcept { return compact ? kFooterCompact : kFooterFull; }
+float RollVisualizer::headerH() const noexcept { return ember ? 2.0f : compact ? kHeaderCompact : kHeaderFull; }
+float RollVisualizer::footerH() const noexcept { return ember ? 4.0f : compact ? kFooterCompact : kFooterFull; }
+
+void RollVisualizer::setEmberStyle (bool shouldUseEmber)
+{
+    ember = shouldUseEmber;
+    compact = compact || ember;
+    barsChoice.setVisible (false);
+    setOpaque (ember);
+    repaint();
+}
+
+namespace
+{
+    /** Ember palette: deep red-orange (low) -> orange (root) -> amber -> hot yellow-white (high). */
+    juce::Colour emberColour (int pitch)
+    {
+        const juce::Colour low (0xffc2300c), root (0xffff7a1a), amber (0xffffb640), hot (0xfffff1c8);
+        if (pitch <= 0)
+            return root.interpolatedWith (low, juce::jlimit (0.0f, 1.0f, (float) -pitch / 12.0f));
+        if (pitch <= 12)
+            return root.interpolatedWith (amber, (float) pitch / 12.0f);
+        return amber.interpolatedWith (hot, juce::jlimit (0.0f, 1.0f, (float) (pitch - 12) / 12.0f));
+    }
+}
 
 RollVisualizer::RollVisualizer (RollsKillaProcessor& p, bool isCompact)
     : processor (p),
@@ -41,7 +64,7 @@ juce::Rectangle<float> RollVisualizer::headerArea() const
 juce::Rectangle<float> RollVisualizer::noteArea() const
 {
     auto r = getLocalBounds().toFloat();
-    r.removeFromTop (headerH() + 6.0f);
+    r.removeFromTop (ember ? 5.0f : headerH() + 6.0f);
     r.removeFromBottom (footerH());
     return r.reduced (kPadX, 0.0f);
 }
@@ -79,7 +102,16 @@ void RollVisualizer::paint (juce::Graphics& g)
 {
     const auto& pattern = processor.getModel().getPattern();
     const auto bounds = getLocalBounds().toFloat();
-    drawPanel (g, bounds, 8.0f);
+    const auto accent = ember ? juce::Colour (0xffff7a1a) : colours::accent;
+    if (ember)
+    {
+        g.setGradientFill (juce::ColourGradient (juce::Colour (0xff050404), 0.0f, 0.0f, juce::Colour (0xff120c09), 0.0f, bounds.getBottom(), false));
+        g.fillAll();
+    }
+    else
+    {
+        drawPanel (g, bounds, 8.0f);
+    }
 
     const auto area = noteArea();
     const auto len = pattern.lengthBeats();
@@ -90,9 +122,11 @@ void RollVisualizer::paint (juce::Graphics& g)
     const auto barsRect = compact ? juce::Rectangle<float>() : barsChoice.getBounds().toFloat().withTrimmedLeft (-40.0f);
 
     // subtle backdrop inside the note area
+    if (! ember)
     g.setGradientFill (juce::ColourGradient (juce::Colour (0xff0b0b0d), area.getX(), area.getY(),
                                              juce::Colour (0xff111114), area.getX(), area.getBottom(), false));
-    g.fillRect (area.expanded (kPadX - 2.0f, 4.0f));
+    if (! ember)
+        g.fillRect (area.expanded (kPadX - 2.0f, 4.0f));
 
     // grid
     for (int step = 0; step <= (int) (len * 4); ++step)
@@ -101,6 +135,12 @@ void RollVisualizer::paint (juce::Graphics& g)
         const auto x = beatToX (beat);
         const auto isBar = step % 16 == 0;
         const auto isBeat = step % 4 == 0;
+        if (ember)
+        {
+            g.setColour (juce::Colour (isBar ? 0xff3a2a20 : isBeat ? 0xff241a14 : 0xff17110d));
+            g.drawVerticalLine (juce::roundToInt (x), area.getY(), area.getBottom());
+            continue;
+        }
         g.setColour (isBar ? colours::outlineLight : isBeat ? colours::outline : colours::outline.withAlpha (0.35f));
         g.drawVerticalLine (juce::roundToInt (x), isBar ? header.getY() + 2.0f : area.getY(), isBar ? bounds.getBottom() - 4.0f : area.getBottom());
     }
@@ -111,6 +151,9 @@ void RollVisualizer::paint (juce::Graphics& g)
     for (int bar = 0; bar < bars; ++bar)
     {
         const auto x = beatToX (bar * (double) kBeatsPerBar);
+
+        if (ember)
+            continue;
 
         if (compact)
         {
@@ -163,8 +206,8 @@ void RollVisualizer::paint (juce::Graphics& g)
     {
         const auto x0 = beatToX (rollStart) - 3.0f, x1 = beatToX (endBeat) + 3.0f;
         const auto r = juce::Rectangle<float>::leftTopRightBottom (x0, area.getY() + area.getHeight() * 0.1f, x1, area.getBottom());
-        g.setGradientFill (juce::ColourGradient (colours::accent.withAlpha (0.0f), r.getX(), r.getY(),
-                                                 colours::accent.withAlpha (0.16f), r.getX(), r.getBottom(), false));
+        g.setGradientFill (juce::ColourGradient (accent.withAlpha (0.0f), r.getX(), r.getY(),
+                                                 accent.withAlpha (ember ? 0.22f : 0.16f), r.getX(), r.getBottom(), false));
         g.fillRect (r);
     };
 
@@ -194,7 +237,7 @@ void RollVisualizer::paint (juce::Graphics& g)
         const auto h = juce::jmax (3.0f, area.getHeight() * 0.94f * (float) n.vel / 127.0f);
         const auto bar = juce::Rectangle<float> (x - w * 0.5f, area.getBottom() - h, w, h);
 
-        auto colour = pitchColour (n.pitch);
+        auto colour = ember ? emberColour (n.pitch) : pitchColour (n.pitch);
         float hot = 0.0f;
         if (playhead >= 0.0)
         {
@@ -231,7 +274,15 @@ void RollVisualizer::paint (juce::Graphics& g)
     }
 
     // playhead
-    if (playhead >= 0.0)
+    if (playhead >= 0.0 && ember)
+    {
+        const auto x = beatToX (playhead);
+        g.setColour (juce::Colours::white.withAlpha (0.18f));
+        g.fillRect (juce::Rectangle<float> (x - 2.0f, 0.0f, 4.0f, bounds.getHeight()));
+        g.setColour (juce::Colour (0xfffff4e8));
+        g.fillRect (juce::Rectangle<float> (x - 0.6f, 0.0f, 1.2f, bounds.getHeight()));
+    }
+    else if (playhead >= 0.0)
     {
         const auto x = beatToX (playhead);
         for (int i = 3; i > 0; --i)

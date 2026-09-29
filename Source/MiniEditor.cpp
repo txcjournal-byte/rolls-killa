@@ -1,20 +1,32 @@
 #include "MiniEditor.h"
-#include "ui/Sigils.h"
+
+#include "engine/CategoryProfile.h"
 
 using namespace rk;
 using namespace rk::ui;
+using namespace rk::ui::metal;
 
 namespace
 {
-    // Layout at 100 % (matches docs/design/mini_window.webp)
-    const juce::Rectangle<int> kHeader     { 6, 6, 588, 30 };
-    const juce::Rectangle<int> kVisualizer { 6, 40, 588, 78 };
-    const juce::Rectangle<int> kHistory    { 6, 119, 588, 12 };
-    const juce::Rectangle<int> kMood       { 6, 134, 210, 16 };
-    const juce::Rectangle<int> kKill       { 6, 151, 210, 55 };
-    const juce::Rectangle<int> kHat        { 222, 134, 150, 72 };
-    const juce::Rectangle<int> kDrag       { 378, 134, 122, 72 };
-    const juce::Rectangle<int> kPlay       { 506, 134, 88, 72 };
+    // Layout at 100 % (matches docs/design/mini_metal.webp)
+    const juce::Rectangle<float> kPlate      { 1.0f, 1.0f, 598.0f, 218.0f };
+    const juce::Rectangle<float> kLogo       { 26.0f, 11.0f, 212.0f, 37.0f };
+    const juce::Rectangle<int>   kBpm        { 318, 17, 78, 40 };
+    const juce::Rectangle<int>   kUndo       { 404, 23, 29, 29 };
+    const juce::Rectangle<int>   kRedo       { 437, 23, 29, 29 };
+    const juce::Rectangle<int>   kBars       { 480, 14, 106, 44 };
+    const juce::Rectangle<float> kSlot       { 16.0f, 64.0f, 568.0f, 42.0f };
+    const juce::Rectangle<float> kPresetLine { 22.0f, 108.0f, 230.0f, 11.0f };
+    const juce::Rectangle<int>   kHistory    { 256, 107, 104, 12 };
+    const juce::Rectangle<int>   kMood       { 14, 118, 100, 22 };
+    const juce::Rectangle<int>   kKill       { 22, 142, 84, 44 };
+    const juce::Rectangle<int>   kHat        { 124, 132, 90, 54 };
+    const juce::Rectangle<int>   kBlunt      { 224, 118, 254, 74 };
+    const juce::Rectangle<int>   kDrag       { 492, 138, 40, 40 };
+    const juce::Rectangle<int>   kPlay       { 545, 115, 48, 52 };
+    const juce::Rectangle<int>   kMode       { 543, 170, 52, 24 };
+    const juce::Rectangle<int>   kSmoke      { 404, 96, 120, 96 };
+    const float kGrooves[] { 118.0f, 219.0f, 484.0f, 540.0f };
 
     constexpr const char* kMiniScaleProp = "miniUiScale";
 }
@@ -23,98 +35,103 @@ namespace
 void RollsKillaMiniEditor::Content::paint (juce::Graphics& g)
 {
     auto& ed = editor;
-    g.fillAll (colours::background);
+    g.fillAll (juce::Colour (0xff070707));
 
-    juce::Random rng (11);
-    for (int i = 0; i < 500; ++i)
+    // the plate
+    const auto scale = (float) g.getInternalContext().getPhysicalPixelScaleFactor();
+    if (ed.steel.isNull() || std::abs (ed.steelScale - scale) > 0.01f)
     {
-        g.setColour (juce::Colours::white.withAlpha (rng.nextFloat() * 0.025f));
-        g.fillRect (rng.nextInt (getWidth()), rng.nextInt (getHeight()), 1, 1);
+        ed.steelScale = scale;
+        ed.steel = renderSteel (kBaseWidth, kBaseHeight, juce::jmin (scale, 3.0f));
+    }
+    {
+        juce::Graphics::ScopedSaveState save (g);
+        juce::Path plate;
+        plate.addRoundedRectangle (kPlate, 7.0f);
+        g.reduceClipRegion (plate);
+        g.drawImage (ed.steel, juce::Rectangle<float> (0.0f, 0.0f, (float) kBaseWidth, (float) kBaseHeight));
+    }
+    g.setColour (juce::Colours::white.withAlpha (0.25f));
+    g.drawRoundedRectangle (kPlate.reduced (1.2f), 6.0f, 0.8f);
+    g.setColour (juce::Colours::black.withAlpha (0.9f));
+    g.drawRoundedRectangle (kPlate, 7.0f, 1.2f);
+
+    drawScrew (g, { 12.0f, 12.0f }, 5.5f, 0.4f);
+    drawScrew (g, { 588.0f, 12.0f }, 5.5f, 1.1f);
+    drawScrew (g, { 12.0f, 208.0f }, 5.5f, 0.9f);
+    drawScrew (g, { 588.0f, 208.0f }, 5.5f, 0.2f);
+
+    // stamped logo
+    juce::GlyphArrangement ga;
+    ga.addLineOfText (juce::Font (juce::FontOptions (40.0f, juce::Font::bold)).withHorizontalScale (0.78f).withExtraKerningFactor (-0.02f),
+                      "ROLLS KILLA", 0.0f, 0.0f);
+    juce::Path logo;
+    ga.createPath (logo);
+    logo.applyTransform (juce::AffineTransform::shear (-0.16f, 0.0f));
+    logo.applyTransform (logo.getTransformToScaleToFit (kLogo, true, juce::Justification::centredLeft));
+    const auto logoBounds = logo.getBounds();
+    g.setColour (juce::Colours::white.withAlpha (0.35f));
+    g.fillPath (logo, juce::AffineTransform::translation (0.0f, 1.1f));
+    g.strokePath (logo, juce::PathStrokeType (1.4f), juce::AffineTransform::translation (0.0f, 1.1f));
+    g.setGradientFill (juce::ColourGradient (juce::Colour (0xff2e2e2c), 0.0f, logoBounds.getY(), juce::Colour (0xff0e0e0e), 0.0f, logoBounds.getBottom(), false));
+    g.fillPath (logo);
+    g.strokePath (logo, juce::PathStrokeType (1.4f));
+    {
+        juce::Graphics::ScopedSaveState save (g);
+        g.reduceClipRegion (logo);
+        g.setOpacity (0.22f);
+        g.drawImage (ed.steel, juce::Rectangle<float> (0.0f, 0.0f, (float) kBaseWidth, (float) kBaseHeight));
     }
 
-    // header
-    drawPanel (g, kHeader.toFloat(), 5.0f);
-    const auto scale = (float) g.getInternalContext().getPhysicalPixelScaleFactor();
-    if (ed.logo.isNull() || std::abs ((float) ed.logo.getHeight() - 28.0f * scale) > 1.0f)
-        ed.logo = renderLogo (28, scale);
-    const auto logoW = (float) ed.logo.getWidth() / scale;
-    g.drawImage (ed.logo, juce::Rectangle<float> (12.0f, 7.0f, logoW, 28.0f));
-
-    // "MINI" tag in the logo's red, slanted like the logo
+    // MINI badge
+    const auto badge = juce::Rectangle<float> (logoBounds.getRight() + 5.0f, logoBounds.getBottom() - 15.0f, 36.0f, 13.0f);
+    g.setColour (juce::Colours::white.withAlpha (0.25f));
+    g.fillRoundedRectangle (badge.translated (0.0f, 0.8f), 2.0f);
+    g.setColour (juce::Colour (0xff161615));
+    g.fillRoundedRectangle (badge, 2.0f);
     {
-        juce::GlyphArrangement ga;
-        ga.addLineOfText (juce::Font (juce::FontOptions (11.0f, juce::Font::bold)).withExtraKerningFactor (0.08f), "MINI", 0.0f, 0.0f);
+        juce::GlyphArrangement mg;
+        mg.addFittedText (plateFont (10.0f, 0.08f), "MINI", badge.getX(), badge.getY(), badge.getWidth(), badge.getHeight(),
+                          juce::Justification::centred, 1);
         juce::Path mini;
-        ga.createPath (mini);
-        mini.applyTransform (juce::AffineTransform::shear (-0.2f, 0.0f).translated (12.0f + logoW + 3.0f, 26.0f));
-        g.setColour (colours::accent.withAlpha (0.25f));
-        g.strokePath (mini, juce::PathStrokeType (2.0f));
-        g.setColour (colours::accent);
+        mg.createPath (mini);
+        mini.applyTransform (juce::AffineTransform::shear (-0.18f, 0.0f).translated (badge.getCentreY() * 0.18f, 0.0f));
+        g.setColour (juce::Colour (0xffb8b8b2));
         g.fillPath (mini);
     }
 
-    const auto x0 = 12.0f + logoW + 38.0f;
-    g.setColour (colours::outlineLight);
-    g.drawVerticalLine ((int) x0, 13.0f, 29.0f);
-    g.setColour (colours::text.withAlpha (0.85f));
-    g.setFont (labelFont (8.5f).withExtraKerningFactor (0.4f));
-    g.drawText ("HI-HAT ROLLS", juce::Rectangle<float> (x0 + 8.0f, 6.0f, 300.0f - x0 - 8.0f, 30.0f), juce::Justification::centredLeft, true);
+    drawEngravedText (g, "TRAP HI-HAT ROLLS GENERATOR", plateFont (7.6f, 0.62f), { 28.0f, 49.0f, 280.0f, 11.0f },
+                      juce::Justification::centredLeft);
 
-    // what plays now (display only - KILL is the way to change it)
-    const auto& preset = ed.proc.getModel().getPreset();
-    auto now = juce::Rectangle<float> (364.0f, 6.0f, 88.0f, 30.0f);
-    g.setColour (colours::textDim);
-    g.setFont (labelFont (7.5f));
-    g.drawText (juce::String (getCategoryProfile (preset.category).name), now.removeFromTop (17.0f), juce::Justification::bottomLeft, true);
-    g.setColour (colours::text.withAlpha (0.8f));
-    g.setFont (uiFont (9.5f, false));
-    g.drawText (preset.name, now, juce::Justification::topLeft, true);
+    drawGroove (g, 308.0f, 15.0f, 58.0f);
+    drawGroove (g, 474.0f, 15.0f, 58.0f);
 
-    g.setColour (colours::textDim);
-    g.setFont (labelFont (9.0f));
-    g.drawText ("BARS", juce::Rectangle<float> (505.0f, 6.0f, 30.0f, 30.0f), juce::Justification::centredLeft, false);
+    // roll window
+    drawRecess (g, kSlot, 4.0f);
+    drawEngravedText (g, ed.shownPresetLine, plateFont (7.0f, 0.12f), kPresetLine, juce::Justification::centredLeft, 0.85f);
 
-    // bottom tiles
-    drawPanel (g, kHat.toFloat(), 5.0f);
-    g.setColour (colours::text.withAlpha (0.85f));
-    g.setFont (labelFont (8.5f));
-    g.drawText ("HI-HAT SAMPLE", kHat.withHeight (18).translated (0, 2), juce::Justification::centred, false);
-    drawPanel (g, kPlay.toFloat(), 5.0f);
+    // bottom row
+    for (auto x : kGrooves)
+        drawGroove (g, x, 121.0f, 206.0f);
+    drawEngravedText (g, "MILLIONS OF COMBINATIONS", plateFont (6.4f, 0.04f), { 12.0f, 188.0f, 104.0f, 10.0f }, juce::Justification::centred);
+    drawEngravedText (g, "HI-HAT SAMPLE", plateFont (8.0f, 0.06f), { 122.0f, 118.0f, 94.0f, 12.0f }, juce::Justification::centred);
+    drawEngravedText (g, "DRAG TO DAW", plateFont (7.4f, 0.02f), { 484.0f, 120.0f, 56.0f, 12.0f }, juce::Justification::centred);
+
+    const auto smokeY = 199.0f;
+    drawEngravedText (g, "SMOKE  FX", plateFont (8.0f, 0.3f), { 310.0f, smokeY - 5.0f, 80.0f, 10.0f }, juce::Justification::centred);
+    for (auto seg : { juce::Range<float> (262.0f, 308.0f), juce::Range<float> (392.0f, 438.0f) })
+    {
+        g.setColour (juce::Colours::black.withAlpha (0.6f));
+        g.fillRect (juce::Rectangle<float> (seg.getStart(), smokeY - 0.6f, seg.getLength(), 1.0f));
+        g.setColour (juce::Colours::white.withAlpha (0.2f));
+        g.fillRect (juce::Rectangle<float> (seg.getStart(), smokeY + 0.5f, seg.getLength(), 0.7f));
+    }
 }
 
 void RollsKillaMiniEditor::Content::mouseDown (const juce::MouseEvent& e)
 {
-    if (e.mods.isPopupMenu() && kHeader.contains (e.getPosition()))
+    if (e.mods.isPopupMenu() && e.position.y < kSlot.getY())
         editor.showScaleMenu();
-}
-
-//==============================================================================
-void RollsKillaMiniEditor::PlayTile::paintButton (juce::Graphics& g, bool highlighted, bool down)
-{
-    auto r = getLocalBounds().toFloat();
-    auto icon = r.removeFromTop (r.getHeight() * 0.62f);
-    const auto s = juce::jmin (icon.getWidth(), icon.getHeight()) * 0.6f * (down ? 0.92f : 1.0f);
-    const auto c = icon.getCentre();
-    const auto col = hostPlaying ? colours::textDim : colours::accent.brighter (highlighted ? 0.25f : 0.0f);
-
-    juce::Path shape;
-    if (previewing)
-        shape.addRoundedRectangle (c.x - s * 0.36f, c.y - s * 0.36f, s * 0.72f, s * 0.72f, 2.0f);
-    else
-        shape.addTriangle (c.x - s * 0.38f, c.y - s * 0.46f, c.x - s * 0.38f, c.y + s * 0.46f, c.x + s * 0.46f, c.y);
-
-    if (! hostPlaying)
-        for (int i = 3; i > 0; --i)
-        {
-            g.setColour (colours::accent.withAlpha (0.12f));
-            g.strokePath (shape, juce::PathStrokeType ((float) i * 2.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-        }
-    g.setGradientFill (juce::ColourGradient (col.brighter (0.3f), c.x, c.y - s * 0.5f, col.darker (0.4f), c.x, c.y + s * 0.5f, false));
-    g.fillPath (shape);
-
-    g.setColour (colours::text.withAlpha (hostPlaying ? 0.5f : 0.9f));
-    g.setFont (labelFont (10.0f).withExtraKerningFactor (0.35f));
-    g.drawText (hostPlaying ? "SYNC" : previewing ? "STOP" : "PLAY", r.withTrimmedTop (-6.0f), juce::Justification::centredTop, false);
 }
 
 //==============================================================================
@@ -122,64 +139,62 @@ RollsKillaMiniEditor::RollsKillaMiniEditor (RollsKillaProcessor& p)
     : AudioProcessorEditor (&p),
       proc (p),
       visualizer (p, true),
-      barsChoice (p.getState(), params::bars, params::barsChoices),
-      hatSelector (p.getState(), [&p] { return p.getSampler().getSampleNames(); }),
-      playMode (p.getState(), params::playMode, { "MIDI", "HOST" })
+      bars (p.getState()),
+      hatPicker (p.getState(), [&p] { return p.getSampler().getSampleNames(); }),
+      blunt (p.getState()),
+      playMode (p.getState())
 {
     setLookAndFeel (&lookAndFeel);
     addAndMakeVisible (content);
 
-    for (auto* c : std::initializer_list<juce::Component*> { &visualizer, &barsChoice, &undoButton, &redoButton, &killButton,
-                                                              &waveform, &hatSelector, &dragZone, &playTile, &playMode })
+    visualizer.setEmberStyle (true);
+    for (auto* c : std::initializer_list<juce::Component*> { &visualizer, &bpm, &undoButton, &redoButton, &bars, &history, &mood,
+                                                              &killButton, &hatPicker, &blunt, &dragButton, &playButton, &playMode, &smoke })
         content.addAndMakeVisible (c);
 
-    content.addAndMakeVisible (bpmBox);
-    content.addAndMakeVisible (history);
-    bpmBox.setTooltip ("Tempo KILL builds rolls for. AUTO = follows the project. Drag up/down to set it, double-click = AUTO.");
-    history.setTooltip ("The last KILLs - click a dot to go back to that roll");
+    bpm.setTooltip ("Tempo. AUTO = follows your DAW, KILL picks rolls that fit it. Drag up/down to set your own, double-click = AUTO.");
+    history.setTooltip ("The last KILLs - click a light to go back to that roll");
+    bars.setTooltip ("Pattern length in bars");
 
-    const char* moods[] { "CHILL", "TRAP", "CRAZY" };
-    const char* moodTips[] { "KILL picks simple, calm rolls", "KILL picks classic trap rolls", "KILL picks the craziest rolls" };
-    for (int i = 0; i < 3; ++i)
-    {
-        auto* b = moodButtons.add (new juce::TextButton (moods[i]));
-        b->setTooltip (moodTips[i]);
-        b->setMouseCursor (juce::MouseCursor::PointingHandCursor);
-        b->onClick = [this, i] { setMood (i); };
-        content.addAndMakeVisible (b);
-    }
-    setMood (proc.getMood());
+    mood.setMood (proc.getMood());
+    mood.setTooltip ("What KILL picks: CHILL = simple rolls, TRAP = classic, CRAZY = the wildest");
+    mood.onChange = [this] (int m) { proc.setMood (m); };
 
     undoButton.setTooltip ("Undo - e.g. back to the previous KILL (Ctrl+Z)");
     redoButton.setTooltip ("Redo (Ctrl+Shift+Z)");
     undoButton.onClick = [this] { proc.undo(); updateStatus(); };
     redoButton.onClick = [this] { proc.redo(); updateStatus(); };
 
-    killButton.caption = "MILLIONS OF COMBINATIONS";
     killButton.setTooltip ("KILL - a new roll: random preset + new variation (right-click: same preset / back to original)");
     killButton.onClick = [this] { proc.killEverything(); updateStatus(); };
     killButton.onSamePresetVariation = [this] { proc.kill(); updateStatus(); };
     killButton.onBackToOriginal = [this] { proc.resetVariation(); updateStatus(); };
 
-    waveform.onFileDropped = [this] (const juce::File& f) { proc.loadCustomSample (f); shownHat = -1; };
-    hatSelector.onChange = [this] { shownHat = -1; };
-    waveform.setSample (proc.getSampler().getSample (hatSelector.getIndex()));
-    shownHat = hatSelector.getIndex();
+    hatPicker.wave.onFileDropped = [this] (const juce::File& f) { proc.loadCustomSample (f); shownHat = -1; };
+    hatPicker.onChange = [this] { shownHat = -1; };
+    shownHat = hatPicker.getIndex();
+    hatPicker.wave.setSample (proc.getSampler().getSample (shownHat));
 
-    dragZone.vertical = true;
-    dragZone.createFile = [this] { return proc.createDragMidiFile(); };
-    dragZone.setTooltip ("Drag the pattern into your DAW (FL Studio: drop on the Playlist or a Piano roll)");
+    blunt.setTooltip ("PUFF - smoke FX on the hats: crackle, a breath in the beat and a hazy filter. Double-click = off.");
 
-    playTile.onClick = [this] { proc.setPreviewEnabled (! proc.isPreviewEnabled()); updateStatus(); };
-    playTile.setTooltip ("Play the pattern at the preset's tempo while the host is stopped");
-    playMode.setTooltip ("MIDI: plays only while a note is held on this channel. HOST: plays whenever the host plays.");
+    dragButton.createFile = [this] { return proc.createDragMidiFile(); };
+    dragButton.setTooltip ("Drag the roll into your DAW (FL Studio: drop on the Playlist or a Piano roll)");
+
+    playButton.onClick = [this] { proc.setPreviewEnabled (! proc.isPreviewEnabled()); updateStatus(); };
+    playButton.setTooltip ("Play the roll while the DAW is stopped");
+    playMode.setTooltip ("MIDI: plays only while a note is held on this channel. HOST: plays whenever the DAW plays.");
 
     uiScale = (float) (double) proc.getState().state.getProperty (kMiniScaleProp, 1.25);  // 125 % default: small but readable
     setWantsKeyboardFocus (true);
     layout();
     setUiScale (uiScale);
     updateStatus();
-    startTimerHz (15);
+
+    // the blunt is already burning when the window opens
+    for (int i = 0; i < 75; ++i)
+        smoke.tick (1.0f / 30.0f, blunt.getValue(), 0.5f,
+                    blunt.getEmberTip() + blunt.getPosition().toFloat() - smoke.getPosition().toFloat());
+    startTimerHz (30);
 }
 
 RollsKillaMiniEditor::~RollsKillaMiniEditor()
@@ -188,107 +203,22 @@ RollsKillaMiniEditor::~RollsKillaMiniEditor()
     setLookAndFeel (nullptr);
 }
 
-void RollsKillaMiniEditor::setMood (int mood)
-{
-    proc.setMood (mood);
-    for (int i = 0; i < moodButtons.size(); ++i)
-        moodButtons[i]->setToggleState (i == proc.getMood(), juce::dontSendNotification);
-}
-
-//==============================================================================
-void RollsKillaMiniEditor::BpmBox::paint (juce::Graphics& g)
-{
-    auto r = getLocalBounds().toFloat().reduced (0.5f);
-    const auto manual = proc.getTargetBpm() > 0.0;
-    g.setColour (colours::background);
-    g.fillRoundedRectangle (r, 3.0f);
-    g.setColour (manual ? colours::accent.withAlpha (0.8f) : colours::outline);
-    g.drawRoundedRectangle (r, 3.0f, 1.0f);
-
-    auto top = r.removeFromTop (r.getHeight() * 0.62f);
-    g.setColour (colours::text);
-    g.setFont (uiFont (11.0f));
-    g.drawText (juce::String (juce::roundToInt (proc.getEffectiveBpm())), top, juce::Justification::centredBottom, false);
-    g.setColour (manual ? colours::accent : colours::textDark);
-    g.setFont (labelFont (6.5f));
-    g.drawText (manual ? "BPM" : "AUTO BPM", r, juce::Justification::centredTop, false);
-}
-
-void RollsKillaMiniEditor::BpmBox::mouseDrag (const juce::MouseEvent& e)
-{
-    proc.setTargetBpm (std::round (startBpm - e.getDistanceFromDragStartY() * 0.5));
-    repaint();
-}
-
-juce::Rectangle<float> RollsKillaMiniEditor::HistoryStrip::dotBounds (int i, int count) const
-{
-    const auto spacing = 14.0f;
-    const auto x0 = getWidth() * 0.5f - (count - 1) * spacing * 0.5f;
-    return juce::Rectangle<float> (8.0f, 8.0f).withCentre ({ x0 + i * spacing, getHeight() * 0.5f });
-}
-
-void RollsKillaMiniEditor::HistoryStrip::paint (juce::Graphics& g)
-{
-    const auto& h = proc.getKillHistory();
-    const auto count = (int) h.size();
-    if (count == 0)
-        return;
-
-    for (int i = 0; i < count; ++i)
-    {
-        auto d = dotBounds (i, count);
-        const auto current = i == proc.getKillHistoryPosition();
-        if (current)
-        {
-            g.setColour (colours::accent.withAlpha (0.3f));
-            g.fillEllipse (d.expanded (2.5f));
-        }
-        g.setColour (current ? colours::accent : (i == hover ? colours::text : colours::outlineLight));
-        g.fillEllipse (current || i == hover ? d : d.reduced (1.0f));
-    }
-}
-
-void RollsKillaMiniEditor::HistoryStrip::mouseMove (const juce::MouseEvent& e)
-{
-    const auto& h = proc.getKillHistory();
-    int found = -1;
-    for (int i = 0; i < (int) h.size(); ++i)
-        if (dotBounds (i, (int) h.size()).expanded (4.0f).contains (e.position))
-            found = i;
-    if (found != hover)
-    {
-        hover = found;
-        setTooltip (found >= 0 ? h[(size_t) found].label : juce::String ("The last KILLs - click a dot to go back to that roll"));
-        setMouseCursor (found >= 0 ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor);
-        repaint();
-    }
-}
-
-void RollsKillaMiniEditor::HistoryStrip::mouseUp (const juce::MouseEvent&)
-{
-    if (hover >= 0)
-    {
-        proc.restoreKillHistory (hover);
-        repaint();
-    }
-}
-
 void RollsKillaMiniEditor::layout()
 {
-    visualizer.setBounds (kVisualizer);
-    barsChoice.setBounds (532, 12, 58, 18);
-    undoButton.setBounds (306, 11, 24, 20);
-    redoButton.setBounds (334, 11, 24, 20);
-    bpmBox.setBounds (456, 10, 44, 22);
+    visualizer.setBounds (kSlot.reduced (3.0f).toNearestInt());
+    bpm.setBounds (kBpm);
+    undoButton.setBounds (kUndo);
+    redoButton.setBounds (kRedo);
+    bars.setBounds (kBars);
     history.setBounds (kHistory);
-    for (int i = 0; i < moodButtons.size(); ++i)
-        moodButtons[i]->setBounds (kMood.getX() + i * (kMood.getWidth() / 3), kMood.getY(), kMood.getWidth() / 3 - (i < 2 ? 2 : 0), kMood.getHeight());
+    mood.setBounds (kMood);
     killButton.setBounds (kKill);
-    waveform.setBounds (kHat.getX() + 8, kHat.getY() + 20, kHat.getWidth() - 16, 26);
-    hatSelector.setBounds (kHat.getX() + 6, kHat.getBottom() - 24, kHat.getWidth() - 12, 20);
-    dragZone.setBounds (kDrag);
-    playTile.setBounds (kPlay.getX(), kPlay.getY() + 2, kPlay.getWidth(), 48);
-    playMode.setBounds (kPlay.getX() + 8, kPlay.getBottom() - 20, kPlay.getWidth() - 16, 15);
+    hatPicker.setBounds (kHat);
+    blunt.setBounds (kBlunt);
+    dragButton.setBounds (kDrag);
+    playButton.setBounds (kPlay);
+    playMode.setBounds (kMode);
+    smoke.setBounds (kSmoke);
 }
 
 void RollsKillaMiniEditor::setUiScale (float scale)
@@ -296,7 +226,6 @@ void RollsKillaMiniEditor::setUiScale (float scale)
     uiScale = juce::jlimit (1.0f, 2.0f, scale);
     proc.getState().state.setProperty (kMiniScaleProp, uiScale, nullptr);
     content.setTransform (juce::AffineTransform::scale (uiScale));
-    logo = {};
     setSize (juce::roundToInt (kBaseWidth * uiScale), juce::roundToInt (kBaseHeight * uiScale));
 }
 
@@ -323,32 +252,47 @@ void RollsKillaMiniEditor::updateStatus()
 {
     const auto hostPlaying = proc.isHostPlaying();
     const auto previewing = proc.isPreviewEnabled() && ! hostPlaying;
-    if (playTile.previewing != previewing || playTile.hostPlaying != hostPlaying)
+    if (playButton.previewing != previewing || playButton.hostPlaying != hostPlaying)
     {
-        playTile.previewing = previewing;
-        playTile.hostPlaying = hostPlaying;
-        playTile.repaint();
+        playButton.previewing = previewing;
+        playButton.hostPlaying = hostPlaying;
+        playButton.repaint();
     }
-    playTile.setEnabled (! hostPlaying);
+    playButton.setEnabled (! hostPlaying);
     undoButton.setEnabled (proc.canUndo());
     redoButton.setEnabled (proc.canRedo());
-    bpmBox.repaint();
+    mood.setMood (proc.getMood());
+    bpm.repaint();
     history.repaint();
 
     const auto seed = proc.getSeed();
     killButton.seedText = seed != 0 ? "#" + juce::String ((int) seed) : juce::String();
-    content.repaint (0, 0, kBaseWidth, 40);
+
+    const auto& preset = proc.getModel().getPreset();
+    const auto line = juce::String (getCategoryProfile (preset.category).name) + "  /  " + preset.name.toUpperCase();
+    if (line != shownPresetLine)
+    {
+        shownPresetLine = line;
+        content.repaint (kPresetLine.expanded (2.0f).toNearestInt());
+    }
 }
 
 void RollsKillaMiniEditor::timerCallback()
 {
-    const auto hat = hatSelector.getIndex();
+    const auto hat = hatPicker.getIndex();
     if (hat != shownHat)
     {
         shownHat = hat;
-        waveform.setSample (proc.getSampler().getSample (hat));
+        hatPicker.wave.setSample (proc.getSampler().getSample (hat));
     }
-    updateStatus();
+
+    const auto glow = proc.getSmokeGlow();
+    blunt.setGlow (glow);
+    smoke.tick (1.0f / 30.0f, blunt.getValue(), glow,
+                blunt.getEmberTip() + blunt.getPosition().toFloat() - smoke.getPosition().toFloat());
+
+    if (++frame % 2 == 0)
+        updateStatus();
 }
 
 bool RollsKillaMiniEditor::keyPressed (const juce::KeyPress& key)

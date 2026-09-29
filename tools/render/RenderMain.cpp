@@ -67,6 +67,11 @@ int main (int argc, char* argv[])
     if (auto* pm = proc.getState().getParameter (rk::params::playMode))
         pm->setValueNotifyingHost (pm->convertTo0to1 (1.0f));
 
+    // --puff N: render with the blunt smoke FX (0-100)
+    if (args.contains ("--puff"))
+        if (auto* pf = proc.getState().getParameter (rk::params::puff))
+            pf->setValueNotifyingHost (pf->convertTo0to1 ((float) args[args.indexOf ("--puff") + 1].getIntValue()));
+
     if (args.contains ("--demo"))
     {
         // One listening file: calmest (1) and craziest (8) preset of every category, one loop each.
@@ -139,6 +144,8 @@ int main (int argc, char* argv[])
             for (int i = 0; i < 5; ++i)
                 proc.killEverything();
             proc.restoreKillHistory (3);
+            if (auto* pf = proc.getState().getParameter (rk::params::puff))
+                pf->setValueNotifyingHost (pf->convertTo0to1 (70.0f));
         }
 
         std::unique_ptr<juce::AudioProcessorEditor> editor (args.contains ("--mini")

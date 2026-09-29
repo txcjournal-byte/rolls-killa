@@ -33,6 +33,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createLayout (const juce::St
     layout.add (std::make_unique<AudioParameterFloat> (ParameterID { volume, 1 }, "Volume", NormalisableRange<float> (-48.0f, 6.0f, 0.1f, 2.0f), 0.0f,
                                                        AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return String (v, 1) + " dB"; })));
     layout.add (std::make_unique<AudioParameterChoice> (ParameterID { playMode, 1 }, "Play Mode", playModeChoices, kPlayModeMidi));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { puff, 1 }, "Puff", NormalisableRange<float> (0.0f, 100.0f, 1.0f), 0.0f, percent));
     return layout;
 }
 

@@ -60,6 +60,7 @@ set(ROLLSKILLA_ENGINE_SOURCES
     Source/engine/PatternShaper.cpp
     Source/engine/VariationEngine.cpp
     Source/engine/MidiExport.cpp
+    Source/engine/SmokeFx.cpp
 )
 
 set(ROLLSKILLA_COMMON_DEFINITIONS
@@ -98,6 +99,7 @@ set(ROLLSKILLA_PLUGIN_SOURCES
     Source/ui/PresetBrowser.cpp
     Source/ui/Sigils.cpp
     Source/ui/Widgets.cpp
+    Source/ui/MetalWidgets.cpp
     ${ROLLSKILLA_ENGINE_SOURCES}
 )
 
@@ -158,6 +160,7 @@ if(ROLLSKILLA_BUILD_TESTS)
         Tests/PlayerTests.cpp
         Tests/ShaperTests.cpp
         Tests/MidiExportTests.cpp
+        Tests/SmokeFxTests.cpp
         ${ROLLSKILLA_ENGINE_SOURCES}
     )
 

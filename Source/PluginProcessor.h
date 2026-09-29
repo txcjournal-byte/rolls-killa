@@ -8,6 +8,7 @@
 #include "engine/PatternPlayer.h"
 #include "engine/RollLibrary.h"
 #include "engine/RollModel.h"
+#include "engine/SmokeFx.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
@@ -111,6 +112,8 @@ public:
     bool isWaitingForMidi() const noexcept { return waitingForMidi.load(); }
     /** Position inside the pattern in beats, -1 when not running. */
     double getPlayheadBeat() const noexcept { return player.getDisplayBeat(); }
+    /** 0..1 - how hard the blunt's ember glows right now (PUFF, UI). */
+    float getSmokeGlow() const noexcept { return smoke.getGlow(); }
     /** Increments every time a new pattern is published (UI refresh). */
     int getPatternVersion() const noexcept { return patternVersion.load(); }
 
@@ -131,6 +134,7 @@ private:
     rk::RollModel model { library };
     juce::AudioProcessorValueTreeState apvts;
     rk::PatternPlayer player;
+    rk::SmokeFx smoke;
     rk::LockFreeSlot<rk::PlaybackPattern> patternSlot;
 
     std::atomic<bool> patternDirty { true };
@@ -163,6 +167,7 @@ private:
         std::atomic<float>* choke = nullptr;
         std::atomic<float>* volume = nullptr;
         std::atomic<float>* playMode = nullptr;
+        std::atomic<float>* puff = nullptr;
     } raw;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RollsKillaProcessor)

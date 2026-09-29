@@ -19,6 +19,9 @@ public:
     /** compact = Rolls Killa Mini: no lock icons and no BARS selector inside, centered bar labels. */
     explicit RollVisualizer (RollsKillaProcessor&, bool compact = false);
 
+    /** Rolls Killa Mini "metal" look: a black glowing slot with ember-orange bars, no labels. */
+    void setEmberStyle (bool shouldUseEmber);
+
     void paint (juce::Graphics&) override;
     void resized() override;
     void mouseMove (const juce::MouseEvent&) override;
@@ -44,6 +47,7 @@ private:
     RollsKillaProcessor& processor;
     SegmentedChoice barsChoice;
     bool compact = false;
+    bool ember = false;
 
     int shownVersion = -1;
     double lastPlayhead = -1.0;

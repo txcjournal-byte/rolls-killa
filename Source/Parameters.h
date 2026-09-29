@@ -22,6 +22,7 @@ inline constexpr const char* decay     = "decay";
 inline constexpr const char* choke     = "choke";
 inline constexpr const char* volume    = "volume";
 inline constexpr const char* playMode  = "playMode";
+inline constexpr const char* puff      = "puff";      // blunt smoke FX (Rolls Killa Mini)
 
 inline constexpr int kMaxPresetIndex = 511;
 inline constexpr int kMaxSeed = 99999;

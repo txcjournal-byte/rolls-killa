@@ -20,6 +20,7 @@ RollsKillaProcessor::RollsKillaProcessor()
     raw.choke = apvts.getRawParameterValue (params::choke);
     raw.volume = apvts.getRawParameterValue (params::volume);
     raw.playMode = apvts.getRawParameterValue (params::playMode);
+    raw.puff = apvts.getRawParameterValue (params::puff);
 
     rebuildPattern (true);
     history.reset (apvts.copyState());
@@ -462,6 +463,7 @@ void RollsKillaProcessor::prepareToPlay (double sampleRate, int)
     currentSampleRate = sampleRate;
     sampler.prepare (sampleRate);
     player.prepare (sampleRate);
+    smoke.prepare (sampleRate);
     previewPpq = 0.0;
 }
 
@@ -645,6 +647,11 @@ void RollsKillaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     playInputUpTo (numSamples);
     renderUpTo (numSamples);
     sampler.endBlock();
+
+    // ---- PUFF (blunt smoke FX), synced to the beat; audio only, the MIDI out stays clean
+    const auto sounding = transport.playing && ! (midiGate && hostIsPlaying && numHeldNotes == 0);
+    smoke.process (buffer.getWritePointer (0), buffer.getNumChannels() > 1 ? buffer.getWritePointer (1) : nullptr, numSamples,
+                   raw.puff->load() / 100.0f, transport.ppq, transport.bpm / 60.0 / currentSampleRate, sounding);
 }
 
 //==============================================================================

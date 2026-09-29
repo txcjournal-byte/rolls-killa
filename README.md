@@ -13,17 +13,24 @@ z vestavěného sampleru, nebo ho přetáhneš jako MIDI do projektu.
 
 ## Rolls Killa Mini
 
-Druhý plugin ve stejném projektu (`Rolls Killa Mini.vst3`): jedno malé okno podle `docs/design/mini_window.webp`
-– visualizer, **KILL** (náhodný z 96 presetů + nová variace + jemné zamíchání knobů = miliony kombinací; pravý klik
-= jen nová variace tohoto presetu / zpět na originál), výběr hajtky, **DRAG MIDI**, **PLAY**, MIDI/HOST, undo/redo
-(↶ vrátí předchozí KILL). Výchozí velikost 125 % (~750 × 265 px), pravý klik na hlavičku = 100–200 %.
+Druhý plugin ve stejném projektu (`Rolls Killa Mini.vst3`): jedna malá kovová cedulka podle
+`docs/design/mini_metal.webp` – „malinký nástroj, který zvládne milion věcí“.
+Výchozí velikost 125 % (~750 × 275 px), pravý klik na horní část = 100–200 %.
 Instaluje se stejně (GitHub Actions artefakt `RollsKillaMini-Windows-VST3`).
 
-- **BPM** (v hlavičce): KILL vybírá rolly, které sedí na tempo projektu (**AUTO BPM** = bere tempo z DAW).
-  Tažením nahoru/dolů nastavíš vlastní tempo, dvojklik = zpět AUTO. Preview a DRAG MIDI jdou v tomto tempu.
-- **CHILL / TRAP / CRAZY** nad KILL: CHILL = jednoduché rolly (presety 1–3 kategorie), TRAP = klasika (4–6),
-  CRAZY = nejdivočejší (7–8).
-- **Tečky pod visualizerem** = posledních 8 KILLů. Klik na tečku vrátí ten roll (najetí myší ukáže název).
+| Ovládání | Co dělá |
+|---|---|
+| **BPM** (oranžový displej) | **AUTO** = tempo z DAW, KILL vybírá rolly, které na něj sedí. Tažení nahoru/dolů = vlastní tempo (**SET**), dvojklik = zpět AUTO. Tečka vpravo bliká do doby, když DAW hraje |
+| **↶ ↷** | undo/redo (↶ vrátí předchozí KILL), Ctrl+Z / Ctrl+Shift+Z |
+| **BARS 1 2 4 8** | délka patternu |
+| okénko s rollem | živý pattern; klik na notu = mute, tažení = velocity, dvojklik na roll = rychlost, pravý klik = smazat |
+| **8 světýlek** | posledních 8 KILLů, klik = návrat k tomu rollu |
+| **CHILL / TRAP / CRAZY** | co KILL vybírá: jednoduché (presety 1–3 kategorie) / klasika (4–6) / nejdivočejší (7–8) |
+| **KILL** | náhodný z 96 presetů + nová variace + jemné zamíchání = miliony kombinací; pravý klik = jen nová variace tohoto presetu / zpět na originál |
+| **HI-HAT SAMPLE** | ‹ › výběr hajtky, klik na jméno = seznam, přetažení WAV na vlnu = vlastní hajtka |
+| **PUFF** (blunt) | kouřový efekt na hajtky: praskání hořící trávy, „nádech“ v rytmu (každé 2 doby) a zakouřený filtr. Táhni kroužek po bluntu, dvojklik = vypnuto. Jen zvuk – MIDI výstup zůstává čistý |
+| **DRAG TO DAW** | chyť tlačítko a přetáhni roll rovnou do FL (Playlist nebo Piano roll) |
+| **PLAY** + **MIDI / HOST** | PLAY = přehrávání, když DAW stojí; MIDI = hraje jen s notou na kanálu, HOST = hraje vždy s DAW |
 
 ![Rolls Killa Mini](docs/screenshots/ui_mini.png)
 
