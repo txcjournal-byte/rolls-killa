@@ -36,19 +36,23 @@ void PresetBar::refresh()
 
 juce::Rectangle<int> PresetBar::categoryArea() const
 {
+    if (compact)
+        return { 92, 0, (getWidth() - 92) * 2 / 5, getHeight() };
     return { 206, 0, 184, getHeight() };
 }
 
 juce::Rectangle<int> PresetBar::presetArea() const
 {
-    return { 400, 0, getWidth() - 400, getHeight() };
+    const auto x = categoryArea().getRight() + 10;
+    return { x, 0, getWidth() - x, getHeight() };
 }
 
 void PresetBar::resized()
 {
     const auto h = getHeight();
-    prev.setBounds (110, (h - 32) / 2, 38, 32);
-    next.setBounds (156, (h - 32) / 2, 38, 32);
+    const auto x0 = compact ? 4 : 110;
+    prev.setBounds (x0, (h - 32) / 2, 38, 32);
+    next.setBounds (x0 + 46, (h - 32) / 2, 38, 32);
     const auto pa = presetArea();
     star.setBounds (pa.getRight() - 58, (h - 24) / 2, 24, 24);
 }
@@ -58,9 +62,12 @@ void PresetBar::paint (juce::Graphics& g)
     drawPanel (g, getLocalBounds().toFloat(), 6.0f);
     const auto& preset = processor.getModel().getPreset();
 
-    g.setColour (colours::text);
-    g.setFont (labelFont (15.0f));
-    g.drawText ("PRESETS", juce::Rectangle<int> (18, 0, 90, getHeight()), juce::Justification::centredLeft, false);
+    if (! compact)
+    {
+        g.setColour (colours::text);
+        g.setFont (labelFont (15.0f));
+        g.drawText ("PRESETS", juce::Rectangle<int> (18, 0, 90, getHeight()), juce::Justification::centredLeft, false);
+    }
 
     g.setColour (colours::outline);
     g.drawVerticalLine (categoryArea().getX() - 6, 8.0f, (float) getHeight() - 8.0f);

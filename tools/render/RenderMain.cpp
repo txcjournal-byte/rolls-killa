@@ -186,6 +186,20 @@ int main (int argc, char* argv[])
         if (auto* browser = editor->findChildWithID ("browser"))
             juce::ignoreUnused (browser);
 
+        // the hi-hat drawer selected: roll editor + rolls panel
+        if (! args.contains ("--mini"))
+        {
+            for (auto* c : editor->getChildren())
+                for (auto* cc : c->getChildren())
+                    if (auto* pad = dynamic_cast<rk::ui::station::Pad*> (cc))
+                        if (pad->onSelect != nullptr)
+                        {
+                            pad->onSelect ((int) rk::DrumType::hat);
+                            break;
+                        }
+            save ("ui_main_hat.png", 2.0f);
+        }
+
         for (auto* c : editor->getChildren())
             for (auto* cc : c->getChildren())
                 if (auto* b = dynamic_cast<rk::ui::PresetBrowser*> (cc))

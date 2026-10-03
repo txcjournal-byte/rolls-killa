@@ -727,13 +727,17 @@ void RollsKillaProcessor::writeKitToState()
     if (old.isValid())
         apvts.state.removeChild (old, nullptr);
     apvts.state.appendChild (kit.toValueTree(), nullptr);
+    ++kitVersion;
 }
 
 void RollsKillaProcessor::syncKitFromState()
 {
     const auto tree = apvts.state.getChildWithName (DrumKit::kTreeType);
     if (tree.isValid())
+    {
         kit.fromValueTree (tree);
+        ++kitVersion;
+    }
     else
         writeKitToState();   // a project from before the kit: keep the defaults
     refreshKitSounds();

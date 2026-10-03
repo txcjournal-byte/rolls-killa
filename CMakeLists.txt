@@ -122,12 +122,13 @@ set(ROLLSKILLA_PLUGIN_SOURCES
     Source/ui/Widgets.cpp
     Source/ui/MetalWidgets.cpp
     Source/ui/SkinWidgets.cpp
+    Source/ui/KitWidgets.cpp
     ${ROLLSKILLA_ENGINE_SOURCES}
 )
 
 function(rollskilla_add_plugin target code name bundle description mini)
     juce_add_plugin(${target}
-        COMPANY_NAME                "Killa"
+        COMPANY_NAME                "TrapVST"
         COMPANY_WEBSITE             ""
         BUNDLE_ID                   ${bundle}
         PLUGIN_MANUFACTURER_CODE    Klla

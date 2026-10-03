@@ -149,6 +149,8 @@ public:
     std::vector<rk::DrumHit> getSlotPattern (rk::DrumType type) const { return kit.pattern (type); }
     /** Length of the whole beat in beats (the longest playing pattern). */
     double getBeatLength() const noexcept { return beatLength.load(); }
+    /** Increments on every kit change (UI refresh). */
+    int getKitVersion() const noexcept { return kitVersion.load(); }
 
     juce::File createSlotMidiFile (rk::DrumType type);
     juce::File createBeatMidiFile();               // all playing drawers, one track each
@@ -185,6 +187,7 @@ private:
     std::array<std::atomic<int>, rk::kNumDrumTypes> hitCounters {};
     std::atomic<int> pendingAudition { 0 };
     std::atomic<double> beatLength { 4.0 };
+    std::atomic<int> kitVersion { 0 };
     std::atomic<float> hatDrawerDb { 0.0f };   // the hi-hat drawer's volume on top of the rolls sampler (Rolls Killa)
 
     std::atomic<bool> patternDirty { true };

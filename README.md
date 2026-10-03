@@ -1,15 +1,35 @@
-# ROLLS KILLA – Hi-Hat Roll Presets
+# ROLLS KILLA – Drum & Roll Factory (TrapVST)
 
-Plugin ze série **Killa** (808 Killa, Keys Killa). Obsahuje knihovnu **96 trapových hi-hat rollů**
-ve 12 kategoriích. Vybereš roll, ten hned hraje synchronně s DAW, pár knoby ho doladíš a buď hraje
-z vestavěného sampleru, nebo ho přetáhneš jako MIDI do projektu.
+Plugin od **TrapVST**. Továrna na trapové bicí: **8 šuplíků** (808, KICK, SNARE, CLAP, HI-HAT, OPEN HAT, PERC, FX).
+Každý šuplík má **zvuk** (plugin ho syntetizuje sám – KILL = nový zvuk – nebo tvůj WAV) a **pattern**. Hi-hat
+je dál engine Rolls Killa (96 trapových presetů rollů + KILL). Beat hraje s FL, přetáhne se jako MIDI a hotový
+**drum kit** nebo **one shot kit** se vyexportuje jako složka WAVů.
 
-- VST3 + Standalone (AU při buildu na macOS), instrument s MIDI výstupem
-- C++17, JUCE 8.0.9 (stahuje se automaticky přes CMake), žádné další závislosti
-- Návrh UI: `docs/design/main_window.webp`, `docs/design/preset_browser.webp`
-- Zadání projektu: `CLAUDE.md`
+- VST3 + Standalone, instrument s MIDI výstupem, C++17, JUCE 8.0.9, žádné další závislosti
+- Všechny zvuky si plugin vyrobí sám (deterministická syntéza) – kity můžeš prodávat, nic cizího v nich není.
 
 ![Rolls Killa](docs/screenshots/ui_main.png)
+
+| Ovládání | Co dělá |
+|---|---|
+| **Pady** | klik = zahraje a vybere šuplík, **KILL** na padu = nový zvuk, přetáhni WAV na pad = tvůj zvuk, pravý klik = menu (mute, pattern on/off, KEEP, zpět na syntézu) |
+| **BEAT** | celý beat po pruzích; klik na pruh = šuplík, klik na světýlko = pattern on/off |
+| **HI-HAT ROLL** | editor rollu (klik = mute noty, tah = velocity, dvojklik = rychlost rollu, pravý klik = smazat) |
+| **SOUND** | TUNE (808 drží tóninu), DECAY, PUNCH, DRIVE, TONE, BODY, VOL; KILL SOUND, LOAD WAV, **KEEP** (do kitu) |
+| **PATTERN** | styl (např. 808: SIMPLE / SLIDES / SOFT / HARD), BARS 1–8, DENSITY, ON/OFF, KILL PATTERN, DRAG MIDI |
+| **HI-HAT ROLLS** | presety (◀ ▶, klik = prohlížeč 96 presetů), ROLL SPEED, DENSITY, SWING, VARY, PITCH, KILL ROLL, DRAG MIDI |
+| **KILL** (velké) | KILL BEAT = nové patterny všech hrajících šuplíků + nový roll (poprvé zapne 808, kick a clap); pravý klik = KILL KIT / KILL EVERYTHING |
+| **KILL MOOD** | CHILL / TRAP / CRAZY – jak divoké jsou nové zvuky, rolly a patterny |
+| **BPM** | AUTO = tempo z DAW, tažení = vlastní, dvojklik = AUTO |
+| **PLAY / MIDI / HOST** | PLAY (nebo mezerník v okně) = hraje, když DAW stojí; MIDI = hraje jen s notou na kanálu, HOST = vždy s DAW |
+| **SMOKE** | PUFF efekt na celý beat (praskání, nádech v rytmu, zakouřený filtr) |
+| **KIT** | jméno kitu, seznam KEEP zvuků (x = smazat), **EXPORT KIT**, **ONE SHOT KIT** (10/25/50/100 zvuků vybraného šuplíku), **DRAG BEAT** (celý beat jako MIDI, stopa na šuplík), KILL KIT |
+
+**Export kitu** (24-bit / 44,1 kHz): `Jméno kitu/808s, Kicks, Snares, Claps, Hi-Hats, Open Hats, Percussion, FX, MIDI`
++ README. Šuplík exportuje své KEEP zvuky, a když žádné nemá, svůj aktuální zvuk. 808 a kicky mají v názvu tóninu.
+
+**MIDI výstup:** hi-hat rolly kanál 1, 808 kanál 2, kick 3, snare 4, clap 5, open hat 7, perc 8, FX 9.
+Undo/redo (Ctrl+Z / Ctrl+Y), celý kit se ukládá do projektu (jen čísla – zvuky se znovu vyrobí stejně).
 
 ## Rolls Killa Mini
 
@@ -82,7 +102,7 @@ zástupné closed hats (stejná jména, podobná délka a jas). Vlastní WAV lze
 |---|---|
 | **PRESETS** (lišta) | klik otevře Preset Browser, ◀ ▶ = předchozí/další preset, ★ = oblíbené |
 | **Preset Browser** | 12 kategorií + USER + FAVORITES, hledání, klik = načíst a hrát, ↑↓ listování, Enter, Esc, **SAVE** = uložit jako user preset |
-| **Roll Visualizer** | klik na notu = mute, tažení nahoru/dolů = velocity, dvojklik na roll = rychlost (1/24 → 1/32 → 1/48 → 1/64 → 1/96), **pravý klik = smazat notu / smazat celý roll / obnovit vše**, zámek = takt, který KILL nemění, **BARS** 1/2/4/8 |
+| **Roll Visualizer** (starší verze) | klik na notu = mute, tažení nahoru/dolů = velocity, dvojklik na roll = rychlost (1/24 → 1/32 → 1/48 → 1/64 → 1/96), **pravý klik = smazat notu / smazat celý roll / obnovit vše**, zámek = takt, který KILL nemění, **BARS** 1/2/4/8 |
 | **ROLL SPEED** | Slower / Original / Faster – posune rychlost všech rollů o krok |
 | **VELOCITY** | Original / Flat / Ramp Up / Ramp Down (jen v rollech) |
 | **DENSITY** | 100 % = originál, méně = ubírá rolly, víc = přidává krátké rolly na osminy |

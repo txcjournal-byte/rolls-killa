@@ -1,179 +1,246 @@
 #include "PluginEditor.h"
-#include "ui/Sigils.h"
 
 using namespace rk;
 using namespace rk::ui;
+using namespace rk::ui::station;
 
 namespace
 {
-    // Layout at 100 % (matches docs/design/main_window.webp)
-    const juce::Rectangle<int> kVisualizer   { 14, 68, 872, 150 };
-    const juce::Rectangle<int> kPresetBar    { 14, 226, 640, 46 };
-    const juce::Rectangle<int> kTransport    { 662, 226, 224, 46 };
-    const juce::Rectangle<int> kControls     { 14, 280, 606, 168 };
-    const juce::Rectangle<int> kSampler      { 628, 280, 258, 168 };
-    const juce::Rectangle<int> kKill         { 14, 456, 450, 94 };
-    const juce::Rectangle<int> kMidiPanel    { 474, 456, 412, 94 };
+    // Layout at 100 %
+    const juce::Rectangle<float> kLogo      { 22.0f, 8.0f, 330.0f, 44.0f };
+    const juce::Rectangle<int>   kBpm       { 372, 14, 88, 46 };
+    const juce::Rectangle<int>   kMood      { 474, 30, 186, 26 };
+    const juce::Rectangle<int>   kUndo      { 672, 22, 34, 34 };
+    const juce::Rectangle<int>   kRedo      { 710, 22, 34, 34 };
+    const juce::Rectangle<int>   kKillBeat  { 754, 8, 134, 60 };
+    const juce::Rectangle<int>   kPlay      { 898, 12, 70, 28 };
+    const juce::Rectangle<int>   kPlayMode  { 898, 44, 70, 20 };
+    const juce::Rectangle<int>   kSmoke     { 974, 6, 58, 62 };
+    const juce::Rectangle<int>   kPads      { 16, 80, 384, 216 };
+    const juce::Rectangle<int>   kBay       { 412, 80, 612, 216 };
+    const juce::Rectangle<int>   kSound     { 16, 306, 520, 160 };
+    const juce::Rectangle<int>   kPattern   { 544, 306, 480, 160 };
+    const juce::Rectangle<int>   kKit       { 16, 476, 1008, 146 };
 
-    constexpr const char* kUiScaleProp = "uiScale";
+    constexpr const char* kUiScaleProp = "stationScale";
 }
 
 //==============================================================================
 void RollsKillaEditor::Content::paint (juce::Graphics& g)
 {
     auto& ed = editor;
-    g.fillAll (colours::background);
-
-    // faint grain so the black is not flat
-    juce::Random rng (7);
-    for (int i = 0; i < 1400; ++i)
+    const auto scale = juce::jmin (3.0f, (float) g.getInternalContext().getPhysicalPixelScaleFactor());
+    if (ed.plate.isNull() || std::abs (ed.plateScale - scale) > 0.01f)
     {
-        g.setColour (juce::Colours::white.withAlpha (rng.nextFloat() * 0.025f));
-        g.fillRect (rng.nextInt (getWidth()), rng.nextInt (getHeight()), 1, 1);
+        ed.plateScale = scale;
+        ed.plate = renderDarkSteel (kBaseWidth, kBaseHeight, scale);
+        ed.logo = {};
     }
-    g.setGradientFill (juce::ColourGradient (colours::accent.withAlpha (0.07f), 120.0f, 0.0f,
-                                             juce::Colours::transparentBlack, 120.0f, 120.0f, true));
-    g.fillRect (0, 0, 420, 140);
+    g.drawImage (ed.plate, getLocalBounds().toFloat());
 
-    // logo + subtitle
-    const auto scale = ed.uiScale * (float) g.getInternalContext().getPhysicalPixelScaleFactor() / juce::jmax (0.01f, ed.uiScale);
-    if (ed.logo.isNull() || std::abs ((float) ed.logo.getHeight() - 60.0f * scale) > 1.0f)
-        ed.logo = renderLogo (60, scale);
-    g.drawImage (ed.logo, juce::Rectangle<float> (10.0f, 4.0f, (float) ed.logo.getWidth() / scale, 60.0f));
+    // screws
+    for (auto p : { juce::Point<float> (9.0f, 9.0f), juce::Point<float> ((float) kBaseWidth - 9.0f, 9.0f),
+                    juce::Point<float> (9.0f, (float) kBaseHeight - 9.0f), juce::Point<float> ((float) kBaseWidth - 9.0f, (float) kBaseHeight - 9.0f) })
+        metal::drawScrew (g, p, 4.5f, p.x * 0.01f);
 
-    const auto logoRight = 10.0f + (float) ed.logo.getWidth() / scale;
-    g.setColour (colours::text.withAlpha (0.85f));
-    g.setFont (labelFont (13.0f).withExtraKerningFactor (0.42f));
-    g.drawText ("HI-HAT ROLL PRESETS", juce::Rectangle<float> (logoRight + 14.0f, 18.0f, 260.0f, 26.0f), juce::Justification::centredLeft, false);
+    // logo: heavy chrome letters with a blood-red glow, scratched
+    if (ed.logo.isNull())
+    {
+        ed.logo = juce::Image (juce::Image::ARGB, juce::roundToInt (kLogo.getRight() * scale) + 20, juce::roundToInt ((kLogo.getBottom() + 8.0f) * scale), true);
+        juce::Graphics lg (ed.logo);
+        lg.addTransform (juce::AffineTransform::scale (scale));
+        juce::GlyphArrangement ga;
+        ga.addLineOfText (juce::Font (juce::FontOptions (48.0f, juce::Font::bold)).withHorizontalScale (0.78f).withExtraKerningFactor (-0.01f), "ROLLS KILLA", 0.0f, 0.0f);
+        juce::Path path;
+        ga.createPath (path);
+        path.applyTransform (juce::AffineTransform::shear (-0.16f, 0.0f));
+        path.applyTransform (path.getTransformToScaleToFit (kLogo, true, juce::Justification::centredLeft));
+        const auto b = path.getBounds();
+        for (int i = 4; i > 0; --i)
+        {
+            lg.setColour (juce::Colour (0xffe0201c).withAlpha (0.09f));
+            lg.strokePath (path, juce::PathStrokeType ((float) i * 3.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        }
+        lg.setColour (juce::Colours::black);
+        lg.fillPath (path, juce::AffineTransform::translation (0.0f, 2.0f));
+        juce::ColourGradient chrome (juce::Colour (0xfff4efe9), 0.0f, b.getY(), juce::Colour (0xff4a4440), 0.0f, b.getBottom(), false);
+        chrome.addColour (0.48, juce::Colour (0xffb9b1aa));
+        chrome.addColour (0.52, juce::Colour (0xff6c6560));
+        lg.setGradientFill (chrome);
+        lg.fillPath (path);
+        {
+            juce::Graphics::ScopedSaveState save (lg);
+            lg.reduceClipRegion (path);
+            juce::Random rng (13);
+            for (int i = 0; i < 260; ++i)
+            {
+                const auto x = b.getX() + rng.nextFloat() * b.getWidth(), y = b.getY() + rng.nextFloat() * b.getHeight();
+                lg.setColour (juce::Colour (0xff1a1514).withAlpha (0.15f + rng.nextFloat() * 0.35f));
+                lg.drawLine (x, y, x + rng.nextFloat() * 9.0f - 4.0f, y + rng.nextFloat() * 3.0f, 0.6f);
+            }
+        }
+        lg.setColour (juce::Colours::black.withAlpha (0.8f));
+        lg.strokePath (path, juce::PathStrokeType (1.0f));
+    }
+    g.drawImage (ed.logo, juce::Rectangle<float> (0.0f, 0.0f, (float) ed.logo.getWidth() / scale, (float) ed.logo.getHeight() / scale));
 
-    g.setColour (colours::textDim);
-    g.setFont (labelFont (10.5f));
-    g.drawText ("UI SCALE", juce::Rectangle<int> (636, 18, 70, 26), juce::Justification::centredRight, false);
+    drawStamped (g, "DRUM  &  ROLL  FACTORY", metal::plateFont (10.5f, 0.45f), { 24.0f, 54.0f, 240.0f, 14.0f }, juce::Justification::centredLeft,
+                 juce::Colour (0xffbdb6af));
+    drawStamped (g, "by TrapVST", metal::plateFont (9.5f, 0.12f), { 250.0f, 54.0f, 102.0f, 14.0f }, juce::Justification::centredRight,
+                 juce::Colour (0xff8c8680));
+    drawStamped (g, "KILL MOOD", metal::plateFont (8.5f, 0.25f), { (float) kMood.getX(), 14.0f, (float) kMood.getWidth(), 12.0f },
+                 juce::Justification::centred, juce::Colour (0xff8c8680));
+}
 
-    // section panels
-    drawPanel (g, kTransport.toFloat());
-    drawPanel (g, kControls.toFloat());
-    drawPanel (g, kSampler.toFloat());
-    drawPanel (g, kMidiPanel.toFloat());
-
-    g.setColour (colours::text);
-    g.setFont (labelFont (12.5f));
-    g.drawText ("ROLL SPEED", juce::Rectangle<int> (kControls.getX() + 16, kControls.getY() + 12, 100, 30), juce::Justification::centredLeft, false);
-    g.drawText ("VELOCITY", juce::Rectangle<int> (kControls.getX() + 312, kControls.getY() + 12, 80, 30), juce::Justification::centredLeft, false);
-    g.setColour (colours::outline);
-    g.drawVerticalLine (kControls.getX() + 302, (float) kControls.getY() + 14.0f, (float) kControls.getY() + 40.0f);
-    g.drawHorizontalLine (kControls.getY() + 50, (float) kControls.getX() + 12.0f, (float) kControls.getRight() - 12.0f);
-    for (int i = 1; i < 5; ++i)
-        g.drawVerticalLine (kControls.getX() + 8 + i * 118, (float) kControls.getY() + 62.0f, (float) kControls.getBottom() - 12.0f);
-
-    g.setColour (colours::textDim);
-    g.setFont (labelFont (11.0f));
-    g.drawText ("HI-HAT SAMPLE", juce::Rectangle<int> (kSampler.getX() + 12, kSampler.getY() + 6, 200, 18), juce::Justification::centredLeft, false);
-    g.drawText ("CHOKE", juce::Rectangle<int> (kSampler.getRight() - 64, kSampler.getY() + 100, 56, 16), juce::Justification::centred, false);
+void RollsKillaEditor::Content::mouseDown (const juce::MouseEvent& e)
+{
+    if (e.mods.isPopupMenu() && e.position.y < (float) kPads.getY())
+        editor.showScaleMenu();
 }
 
 //==============================================================================
 RollsKillaEditor::RollsKillaEditor (RollsKillaProcessor& p)
     : AudioProcessorEditor (&p),
       proc (p),
-      visualizer (p),
-      presetBar (p),
       playMode (p.getState(), params::playMode, { "MIDI", "HOST" }),
-      rollSpeed (p.getState(), params::rollSpeed, params::rollSpeedChoices),
-      velMode (p.getState(), params::velMode, params::velModeChoices),
-      density (p.getState(), params::density, "DENSITY"),
-      groove (p.getState(), params::groove, "GROOVE"),
-      pitchRamp (p.getState(), params::pitchRamp, "PITCH RAMP"),
-      swing (p.getState(), params::swing, "SWING"),
-      variation (p.getState(), params::variation, "VARIATION"),
-      hatSelector (p.getState(), [&p] { return p.getSampler().getSampleNames(); }),
-      tune (p.getState(), params::tune, "TUNE", true),
-      decay (p.getState(), params::decay, "DECAY", true),
-      volume (p.getState(), params::volume, "VOLUME", true),
-      chokeAttachment (p.getState(), params::choke, chokeSwitch),
+      smokeAttachment (p.getState(), params::puff, smoke),
+      rollView (p),
       browser (p)
 {
     setLookAndFeel (&lookAndFeel);
     addAndMakeVisible (content);
 
-    for (auto pct : { 100, 125, 150 })
+    // header
+    for (auto* c : std::initializer_list<juce::Component*> { &bpm, &mood, &undoButton, &redoButton, &killBeat, &playButton, &playMode, &smoke })
+        content.addAndMakeVisible (c);
+    bpm.setTooltip ("Tempo: AUTO follows your DAW. Drag up/down for your own, double-click = AUTO");
+    mood.setTooltip ("How wild KILL goes: CHILL / TRAP / CRAZY (sounds, rolls and patterns)");
+    mood.setSelected (proc.getMood());
+    mood.onChange = [this] (int m) { proc.setMood (m); };
+    undoButton.setTooltip ("Undo (Ctrl+Z)");
+    redoButton.setTooltip ("Redo (Ctrl+Y)");
+    undoButton.onClick = [this] { proc.undo(); refreshAll(); };
+    redoButton.onClick = [this] { proc.redo(); refreshAll(); };
+    killBeat.setTooltip ("KILL BEAT - new patterns for every playing drawer + a new hi-hat roll (right-click: new kit sounds)");
+    killBeat.onClick = [this] { proc.killBeat(); refreshAll(); };
+    killBeat.onKillKit = [this] { proc.killKit(); refreshAll(); };
+    killBeat.onKillAll = [this] { proc.killKit(); proc.killBeat(); refreshAll(); };
+    playButton.setTooltip ("Play the beat while the DAW is stopped (or SPACE in this window)");
+    playButton.onClick = [this] { proc.setPreviewEnabled (! proc.isPreviewEnabled()); updateStatus(); };
+    playMode.setTooltip ("MIDI: plays only while a note is held on this channel. HOST: plays whenever the DAW plays");
+    smoke.setTooltip ("SMOKE (PUFF): crackle, a breath in the beat and a hazy filter on the whole beat");
+
+    // pads
+    for (int t = 0; t < kNumDrumTypes; ++t)
     {
-        auto* b = scaleButtons.add (new juce::TextButton (juce::String (pct) + "%"));
-        b->setMouseCursor (juce::MouseCursor::PointingHandCursor);
-        b->onClick = [this, pct] { setUiScale ((float) pct / 100.0f); };
-        content.addAndMakeVisible (b);
+        auto* pad = pads.add (new Pad (proc, t));
+        pad->onSelect = [this] (int type) { selectDrawer (type); };
+        pad->onChanged = [this] { refreshAll(); };
+        pad->onLoadWav = [this] (int type) { loadWavInto (type); };
+        content.addAndMakeVisible (pad);
     }
 
-    content.addAndMakeVisible (visualizer);
-    content.addAndMakeVisible (presetBar);
-    presetBar.onOpenBrowser = [this] (int category) { browser.open (category); };
-
-    for (auto* b : { &undoButton, &redoButton, &previewButton, &loadWavButton, &exportButton })
+    content.addAndMakeVisible (beatView);
+    content.addChildComponent (rollView);
+    beatView.onSelect = [this] (int type) { selectDrawer (type); };
+    beatView.onChanged = [this] { refreshAll(); };
+    for (auto* b : { &beatTab, &rollTab })
         content.addAndMakeVisible (b);
-    undoButton.setTooltip ("Undo (Ctrl+Z)");
-    redoButton.setTooltip ("Redo (Ctrl+Shift+Z)");
-    undoButton.onClick = [this] { proc.undo(); updateStatus(); };
-    redoButton.onClick = [this] { proc.redo(); updateStatus(); };
-    previewButton.setTooltip ("Preview: play the pattern at the preset's tempo while the host is stopped");
-    content.addAndMakeVisible (playMode);
-    playMode.setTooltip ("MIDI: plays only while a note is held on this channel (FL: one long note in the piano roll; "
-                         "a muted channel stays silent). HOST: plays whenever the host plays.");
-    previewButton.onClick = [this] { proc.setPreviewEnabled (! proc.isPreviewEnabled()); updateStatus(); };
+    beatTab.onClick = [this] { showRoll (false); };
+    rollTab.onClick = [this] { showRoll (true); };
+    beatTab.setTooltip ("The whole beat");
+    rollTab.setTooltip ("Edit the hi-hat roll: click a note = mute, drag = velocity, double-click a roll = speed, right-click = delete");
 
-    for (auto* c : std::initializer_list<juce::Component*> { &rollSpeed, &velMode, &density, &groove, &pitchRamp, &swing, &variation,
-                                                              &hatSelector, &waveform, &tune, &decay, &volume, &chokeSwitch,
-                                                              &killButton, &dragZone })
-        content.addAndMakeVisible (c);
-
-    density.setTooltip ("Density: fewer (< 100 %) or more (> 100 %) rolls");
-    variation.setTooltip ("How much KILL changes the preset");
-    pitchRamp.setTooltip ("Pitch ramp added across every roll");
-
-    loadWavButton.label = "LOAD WAV";
-    loadWavButton.setTooltip ("Load your own hi-hat (WAV/AIFF) - or drop it on the waveform");
-    loadWavButton.onClick = [this] { chooseCustomSample(); };
-    waveform.onFileDropped = [this] (const juce::File& f) { proc.loadCustomSample (f); shownHat = -1; };
-    hatSelector.onChange = [this] { shownHat = -1; };
-
-    killButton.onClick = [this] { proc.kill(); updateStatus(); };
-    killButton.onBackToOriginal = [this] { proc.resetVariation(); updateStatus(); };
-
-    dragZone.createFile = [this] { return proc.createDragMidiFile(); };
-    dragZone.setTooltip ("Drag the pattern into your DAW (FL Studio: drop on the Playlist or a Piano roll)");
-    exportButton.label = "EXPORT .MID";
-    exportButton.onClick = [this] { exportMidi(); };
+    content.addAndMakeVisible (soundPanel);
+    content.addAndMakeVisible (patternPanel);
+    content.addChildComponent (hatPanel);
+    content.addAndMakeVisible (kitPanel);
+    soundPanel.onChanged = [this] { refreshAll(); };
+    soundPanel.onLoadWav = [this] { loadWavInto (selected); };
+    patternPanel.onChanged = [this] { beatView.repaint(); refreshAll(); };
+    hatPanel.onChanged = [this] { refreshAll(); };
+    hatPanel.onOpenBrowser = [this] (int category) { browser.open (category); };
+    kitPanel.onChanged = [this] { refreshAll(); };
+    kitPanel.onExportKit = [this] { exportKit(); };
+    kitPanel.onExportOneShots = [this] (int count) { exportOneShots (count); };
 
     content.addChildComponent (browser);
-    browser.onPresetLoaded = [this] { updateStatus(); };
+    browser.onPresetLoaded = [this] { refreshAll(); };
 
-    waveform.setSample (proc.getSampler().getSample (hatSelector.getIndex()));
-    shownHat = hatSelector.getIndex();
+    // only the window and text fields take the keyboard; SPACE never re-presses the last clicked button
+    std::function<void (juce::Component&)> noButtonFocus = [&noButtonFocus] (juce::Component& c)
+    {
+        if (dynamic_cast<juce::TextEditor*> (&c) == nullptr)
+            c.setWantsKeyboardFocus (false);
+        for (auto* child : c.getChildren())
+            noButtonFocus (*child);
+    };
+    noButtonFocus (content);
+    setWantsKeyboardFocus (true);
 
     uiScale = (float) (double) proc.getState().state.getProperty (kUiScaleProp, 1.0);
-    setWantsKeyboardFocus (true);
     layout();
     setUiScale (uiScale);
-    updateStatus();
-    startTimerHz (15);
+    selectDrawer (0);
+    refreshAll();
+    for (auto* pad : pads)
+        pad->tick();
+    startTimerHz (30);
 }
 
 RollsKillaEditor::~RollsKillaEditor()
 {
     stopTimer();
+    juce::PopupMenu::dismissAllActiveMenus();
     setLookAndFeel (nullptr);
+}
+
+void RollsKillaEditor::layout()
+{
+    bpm.setBounds (kBpm);
+    mood.setBounds (kMood);
+    undoButton.setBounds (kUndo);
+    redoButton.setBounds (kRedo);
+    killBeat.setBounds (kKillBeat);
+    playButton.setBounds (kPlay);
+    playMode.setBounds (kPlayMode);
+    smoke.setBounds (kSmoke);
+
+    const auto padW = kPads.getWidth() / 4, padH = kPads.getHeight() / 2;
+    for (int i = 0; i < pads.size(); ++i)
+        pads[i]->setBounds (kPads.getX() + (i % 4) * padW, kPads.getY() + (i / 4) * padH, padW, padH);
+
+    beatView.setBounds (kBay);
+    rollView.setBounds (kBay.withTrimmedTop (26));
+    rollTab.setBounds (kBay.getRight() - 110, kBay.getY() + 4, 104, 20);
+    beatTab.setBounds (kBay.getRight() - 172, kBay.getY() + 4, 60, 20);
+
+    soundPanel.setBounds (kSound);
+    patternPanel.setBounds (kPattern);
+    hatPanel.setBounds (kPattern);
+    kitPanel.setBounds (kKit);
+    browser.setBounds (0, 0, kBaseWidth, kBaseHeight);
 }
 
 void RollsKillaEditor::setUiScale (float scale)
 {
-    uiScale = juce::jlimit (1.0f, 1.5f, scale);
+    uiScale = juce::jlimit (0.75f, 1.5f, scale);
     proc.getState().state.setProperty (kUiScaleProp, uiScale, nullptr);
     content.setTransform (juce::AffineTransform::scale (uiScale));
-    logo = {};
     setSize (juce::roundToInt (kBaseWidth * uiScale), juce::roundToInt (kBaseHeight * uiScale));
+}
 
-    const int pcts[] { 100, 125, 150 };
-    for (int i = 0; i < scaleButtons.size(); ++i)
-        scaleButtons[i]->setToggleState (juce::roundToInt (uiScale * 100.0f) == pcts[i], juce::dontSendNotification);
+void RollsKillaEditor::showScaleMenu()
+{
+    juce::PopupMenu menu;
+    menu.addSectionHeader ("UI SCALE");
+    for (auto pct : { 75, 90, 100, 125, 150 })
+        menu.addItem (pct, juce::String (pct) + " %", true, juce::roundToInt (uiScale * 100.0f) == pct);
+    menu.showMenuAsync (juce::PopupMenu::Options(), [safe = juce::Component::SafePointer<RollsKillaEditor> (this)] (int result)
+                        {
+                            if (safe != nullptr && result > 0)
+                                safe->setUiScale ((float) result / 100.0f);
+                        });
 }
 
 void RollsKillaEditor::resized()
@@ -181,145 +248,156 @@ void RollsKillaEditor::resized()
     content.setBounds (0, 0, kBaseWidth, kBaseHeight);
 }
 
-void RollsKillaEditor::layout()
+void RollsKillaEditor::selectDrawer (int type)
 {
-    for (int i = 0; i < scaleButtons.size(); ++i)
-        scaleButtons[i]->setBounds (714 + i * 58, 16, 54, 30);
-
-    visualizer.setBounds (kVisualizer);
-    presetBar.setBounds (kPresetBar);
-
-    auto t = kTransport.reduced (8, 7);
-    undoButton.setBounds (t.removeFromLeft (34));
-    t.removeFromLeft (4);
-    redoButton.setBounds (t.removeFromLeft (34));
-    t.removeFromLeft (4);
-    playMode.setBounds (t.removeFromLeft (80).reduced (0, 3));
-    t.removeFromLeft (6);
-    previewButton.setBounds (t);
-
-    const auto c = kControls;
-    rollSpeed.setBounds (c.getX() + 110, c.getY() + 12, 180, 30);
-    velMode.setBounds (c.getX() + 392, c.getY() + 12, 202, 30);
-    int x = c.getX() + 12;
-    for (auto* k : { &density, &groove, &pitchRamp, &swing, &variation })
+    selected = juce::jlimit (0, kNumDrumTypes - 1, type);
+    for (int i = 0; i < pads.size(); ++i)
     {
-        k->setBounds (x, c.getY() + 58, 110, 104);
-        x += 118;
+        pads[i]->selected = i == selected;
+        pads[i]->repaint();
     }
+    beatView.selected = selected;
+    beatView.repaint();
+    soundPanel.setDrawer (selected);
+    const auto hat = drumTypeFromIndex (selected) == DrumType::hat;
+    patternPanel.setVisible (! hat);
+    hatPanel.setVisible (hat);
+    if (hat)
+        hatPanel.refresh();
+    else
+        patternPanel.setDrawer (selected);
+    kitPanel.selectedDrawer = selected;
+    kitPanel.refresh();
+    showRoll (hat);
+}
 
-    const auto s = kSampler;
-    hatSelector.setBounds (s.getX() + 10, s.getY() + 26, 132, 28);
-    loadWavButton.setBounds (s.getX() + 148, s.getY() + 26, 100, 28);
-    waveform.setBounds (s.getX() + 10, s.getY() + 60, 238, 34);
-    tune.setBounds (s.getX() + 6, s.getY() + 96, 62, 70);
-    decay.setBounds (s.getX() + 68, s.getY() + 96, 62, 70);
-    volume.setBounds (s.getX() + 130, s.getY() + 96, 62, 70);
-    chokeSwitch.setBounds (s.getRight() - 60, s.getY() + 122, 48, 30);
+void RollsKillaEditor::showRoll (bool roll)
+{
+    rollShown = roll;
+    rollView.setVisible (roll);
+    beatView.setVisible (true);   // the bay frame + title stay
+    beatTab.lit = ! roll;
+    rollTab.lit = roll;
+    beatTab.repaint();
+    rollTab.repaint();
+}
 
-    killButton.setBounds (kKill);
-    dragZone.setBounds (kMidiPanel.getX() + 10, kMidiPanel.getY() + 10, 270, kMidiPanel.getHeight() - 20);
-    exportButton.setBounds (kMidiPanel.getRight() - 126, kMidiPanel.getCentreY() - 20, 116, 40);
-
-    browser.setBounds (0, 0, kBaseWidth, kBaseHeight);
+void RollsKillaEditor::refreshAll()
+{
+    shownKitVersion = proc.getKitVersion();
+    soundPanel.refresh();
+    if (patternPanel.isVisible())
+        patternPanel.refresh();
+    if (hatPanel.isVisible())
+        hatPanel.refresh();
+    kitPanel.refresh();
+    mood.setSelected (proc.getMood());
+    for (auto* pad : pads)
+        pad->repaint();
+    beatView.repaint();
+    updateStatus();
 }
 
 void RollsKillaEditor::updateStatus()
 {
-    undoButton.setEnabled (proc.canUndo());
-    redoButton.setEnabled (proc.canRedo());
-
     const auto hostPlaying = proc.isHostPlaying();
     const auto previewing = proc.isPreviewEnabled() && ! hostPlaying;
-    previewButton.setToggleState (previewing, juce::dontSendNotification);
-    previewButton.setIcon (previewing ? Icon::stop : Icon::play);
-    previewButton.setEnabled (! hostPlaying);
-    previewButton.repaint();
-
-    const auto seed = proc.getSeed();
-    killButton.seedText = seed != 0 ? "#" + juce::String ((int) seed) : juce::String();
-    killButton.repaint();
-
-    presetBar.refresh();
+    playButton.setButtonText (hostPlaying ? "SYNC" : previewing ? "STOP" : "PLAY");
+    playButton.lit = previewing || hostPlaying;
+    playButton.setEnabled (! hostPlaying);
+    playButton.repaint();
+    undoButton.setEnabled (proc.canUndo());
+    redoButton.setEnabled (proc.canRedo());
+    bpm.repaint();
 }
 
 void RollsKillaEditor::timerCallback()
 {
-    const auto version = proc.getPatternVersion();
-    if (version != shownPatternVersion)
-    {
-        shownPatternVersion = version;
-        presetBar.refresh();
-    }
+    for (auto* pad : pads)
+        pad->tick();
+    beatView.tick();
 
-    const auto hat = hatSelector.getIndex();
-    if (hat != shownHat)
+    if (proc.getKitVersion() != shownKitVersion || proc.getPatternVersion() != shownPatternVersion)
     {
-        shownHat = hat;
-        waveform.setSample (proc.getSampler().getSample (hat));
+        shownPatternVersion = proc.getPatternVersion();
+        refreshAll();
     }
-
-    updateStatus();
+    if (++frame % 3 == 0)
+        updateStatus();
 }
 
 bool RollsKillaEditor::keyPressed (const juce::KeyPress& key)
 {
-    const auto cmd = key.getModifiers().isCommandDown();
-    if (cmd && key.getKeyCode() == 'Z')
+    if (key.getKeyCode() == juce::KeyPress::spaceKey && ! key.getModifiers().isAnyModifierKeyDown())
     {
-        key.getModifiers().isShiftDown() ? proc.redo() : proc.undo();
+        proc.setPreviewEnabled (! proc.isPreviewEnabled());
         updateStatus();
         return true;
     }
-    if (cmd && key.getKeyCode() == 'Y')
+    if (key.getModifiers().isCommandDown() && (key.getKeyCode() == 'Z' || key.getKeyCode() == 'Y'))
     {
-        proc.redo();
-        updateStatus();
-        return true;
-    }
-    if (key == juce::KeyPress::leftKey || key == juce::KeyPress::rightKey)
-    {
-        proc.stepPreset (key == juce::KeyPress::leftKey ? -1 : 1);
-        updateStatus();
+        const auto redo = key.getKeyCode() == 'Y' || key.getModifiers().isShiftDown();
+        redo ? proc.redo() : proc.undo();
+        refreshAll();
         return true;
     }
     return false;
 }
 
-void RollsKillaEditor::chooseCustomSample()
+//==============================================================================
+void RollsKillaEditor::loadWavInto (int type)
 {
-    fileChooser = std::make_unique<juce::FileChooser> ("Load a hi-hat sample", juce::File(), "*.wav;*.aif;*.aiff;*.flac");
+    fileChooser = std::make_unique<juce::FileChooser> ("Your " + juce::String (drumTypeName (drumTypeFromIndex (type))) + " (WAV / AIFF)",
+                                                       juce::File::getSpecialLocation (juce::File::userMusicDirectory), "*.wav;*.aif;*.aiff;*.flac");
     fileChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-                              [this] (const juce::FileChooser& fc)
+                              [this, type] (const juce::FileChooser& fc)
                               {
-                                  const auto file = fc.getResult();
-                                  if (file.existsAsFile())
-                                  {
-                                      const auto error = proc.loadCustomSample (file);
-                                      if (error.isNotEmpty())
-                                          juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Rolls Killa", error);
-                                      shownHat = -1;
-                                  }
+                                  const auto f = fc.getResult();
+                                  if (! f.existsAsFile())
+                                      return;
+                                  const auto error = proc.loadSlotFile (drumTypeFromIndex (type), f);
+                                  if (error.isNotEmpty())
+                                      kitPanel.showMessage (error.toUpperCase());
+                                  else
+                                      proc.auditionSlot (drumTypeFromIndex (type));
+                                  refreshAll();
                               });
 }
 
-void RollsKillaEditor::exportMidi()
+void RollsKillaEditor::exportKit()
 {
-    const auto name = "Rolls Killa - " + proc.getModel().getPreset().name + ".mid";
-    fileChooser = std::make_unique<juce::FileChooser> ("Export MIDI",
-                                                       juce::File::getSpecialLocation (juce::File::userDocumentsDirectory)
-                                                           .getChildFile (juce::File::createLegalFileName (name)),
-                                                       "*.mid");
-    fileChooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::warnAboutOverwriting,
+    auto start = juce::File::getSpecialLocation (juce::File::userMusicDirectory).getChildFile ("Rolls Killa Kits");
+    start.createDirectory();
+    fileChooser = std::make_unique<juce::FileChooser> ("Where should the kit go?", start);
+    fileChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
                               [this] (const juce::FileChooser& fc)
                               {
-                                  auto file = fc.getResult();
-                                  if (file == juce::File())
+                                  const auto dir = fc.getResult();
+                                  if (! dir.isDirectory())
                                       return;
-                                  if (! file.hasFileExtension ("mid"))
-                                      file = file.withFileExtension ("mid");
-                                  if (! proc.exportMidi (file))
-                                      juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Rolls Killa",
-                                                                              "Could not write " + file.getFullPathName());
+                                  const auto r = proc.exportKitTo (dir);
+                                  kitPanel.showMessage (r.ok ? juce::String (r.wavs) + " SOUNDS + " + juce::String (r.midis) + " MIDI  ->  " + r.folder.getFileName().toUpperCase()
+                                                             : r.error.toUpperCase(),
+                                                        r.folder);
+                              });
+}
+
+void RollsKillaEditor::exportOneShots (int count)
+{
+    auto start = juce::File::getSpecialLocation (juce::File::userMusicDirectory).getChildFile ("Rolls Killa Kits");
+    start.createDirectory();
+    fileChooser = std::make_unique<juce::FileChooser> ("Where should the one-shot kit go?", start);
+    const auto type = selected;
+    fileChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
+                              [this, count, type] (const juce::FileChooser& fc)
+                              {
+                                  const auto dir = fc.getResult();
+                                  if (! dir.isDirectory())
+                                      return;
+                                  const auto r = proc.exportOneShotsTo (dir, drumTypeFromIndex (type), count);
+                                  kitPanel.showMessage (r.ok ? juce::String (r.wavs) + " " + juce::String (drumTypeFolder (drumTypeFromIndex (type))).toUpperCase()
+                                                                   + "  ->  " + r.folder.getFileName().toUpperCase()
+                                                             : r.error.toUpperCase(),
+                                                        r.folder);
                               });
 }

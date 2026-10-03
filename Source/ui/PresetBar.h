@@ -22,6 +22,7 @@ public:
     void refresh();
 
     std::function<void (int category)> onOpenBrowser;
+    bool compact = false;   // no "PRESETS" title, arrows on the left (Rolls Killa hi-hat panel)
 
 private:
     juce::Rectangle<int> categoryArea() const;
