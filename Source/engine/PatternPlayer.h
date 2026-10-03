@@ -18,6 +18,7 @@ struct PlaybackPattern
         double len;
         int note;
         int vel;
+        int slot = 0;               // 0 = the hi-hat rolls, 1..8 = kit drawer (DrumType index + 1)
     };
 
     std::vector<Event> events;      // sorted by beat, muted notes removed
@@ -40,6 +41,7 @@ struct PlayerEvent
     int sampleOffset;
     int note;
     int vel;                        // 0 = note off
+    int slot = 0;                   // see PlaybackPattern::Event::slot
 };
 
 /**
@@ -68,6 +70,7 @@ private:
     {
         double ppq;
         int note;
+        int slot;
     };
 
     int flushOffs (int sampleOffset, std::array<PlayerEvent, kMaxEventsPerBlock>& out, int count) noexcept;

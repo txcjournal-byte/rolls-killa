@@ -22,6 +22,8 @@ RollsKillaProcessor::RollsKillaProcessor()
     raw.playMode = apvts.getRawParameterValue (params::playMode);
     raw.puff = apvts.getRawParameterValue (params::puff);
 
+    writeKitToState();
+    refreshKitSounds();
     rebuildPattern (true);
     history.reset (apvts.copyState());
     startTimerHz (30);
@@ -63,7 +65,7 @@ HatSamplerSettings RollsKillaProcessor::readSamplerSettings() const noexcept
     s.tuneSemitones = raw.tune->load();
     s.decayMs = raw.decay->load();
     s.choke = raw.choke->load() > 0.5f;
-    s.volumeDb = raw.volume->load();
+    s.volumeDb = raw.volume->load() + hatDrawerDb.load (std::memory_order_relaxed);
     return s;
 }
 
@@ -73,7 +75,10 @@ void RollsKillaProcessor::rebuildPattern (bool force)
 
     if (model.update (readModelSettings(), force) || force)
     {
-        patternSlot.publish (model.makePlayback (kRootNote));
+        auto pb = model.makePlayback (kRootNote);
+        mergeKit (*pb);
+        beatLength.store (pb->lengthBeats);
+        patternSlot.publish (std::move (pb));
         ++patternVersion;
     }
 }
@@ -381,6 +386,7 @@ void RollsKillaProcessor::applyRestoredState()
     if (customPath.isNotEmpty() && juce::File (customPath) != sampler.getCustomSampleFile())
         sampler.loadCustomSample (juce::File (customPath));
 
+    syncKitFromState();
     rebuildPattern (true);
 }
 
@@ -464,6 +470,7 @@ void RollsKillaProcessor::prepareToPlay (double sampleRate, int)
     sampler.prepare (sampleRate);
     player.prepare (sampleRate);
     smoke.prepare (sampleRate);
+    kitSampler.prepare (sampleRate);
     previewPpq = 0.0;
 }
 
@@ -604,6 +611,15 @@ void RollsKillaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
     // ---- render ------------------------------------------------------------
     sampler.beginBlock (readSamplerSettings());
+    kitSampler.beginBlock();
+
+    if (const auto a = pendingAudition.exchange (0); a > 0)
+    {
+        if (a - 1 == (int) DrumType::hat)
+            sampler.noteOn (kRootNote, 112);
+        else
+            kitSampler.audition (a - 1, 112);
+    }
 
     int rendered = 0;
     int nextInput = 0;
@@ -614,6 +630,7 @@ void RollsKillaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         if (offset > rendered)
         {
             sampler.render (buffer, rendered, offset - rendered);
+            kitSampler.render (buffer, rendered, offset - rendered);
             rendered = offset;
         }
     };
@@ -634,20 +651,33 @@ void RollsKillaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         playInputUpTo (e.sampleOffset);
         renderUpTo (e.sampleOffset);
 
+        // slot 0 = the hi-hat rolls (MIDI channel 1), 1..8 = kit drawers (channel 2..9)
+        const auto channel = e.slot + 1;
         if (e.vel > 0)
         {
-            sampler.noteOn (e.note, e.vel);
-            midi.addEvent (juce::MidiMessage::noteOn (1, e.note, (juce::uint8) e.vel), e.sampleOffset);
+            if (e.slot == 0)
+            {
+                sampler.noteOn (e.note, e.vel);
+                kitSampler.choke ((int) DrumType::openHat);   // a closed hat cuts the open hat
+                hitCounters[(size_t) DrumType::hat].fetch_add (1, std::memory_order_relaxed);
+            }
+            else
+            {
+                kitSampler.noteOn (e.slot - 1, e.note, e.vel);
+                hitCounters[(size_t) juce::jlimit (0, kNumDrumTypes - 1, e.slot - 1)].fetch_add (1, std::memory_order_relaxed);
+            }
+            midi.addEvent (juce::MidiMessage::noteOn (channel, e.note, (juce::uint8) e.vel), e.sampleOffset);
         }
         else
         {
-            midi.addEvent (juce::MidiMessage::noteOff (1, e.note), e.sampleOffset);
+            midi.addEvent (juce::MidiMessage::noteOff (channel, e.note), e.sampleOffset);
         }
     }
 
     playInputUpTo (numSamples);
     renderUpTo (numSamples);
     sampler.endBlock();
+    kitSampler.endBlock();
 
     // ---- PUFF (blunt smoke FX), synced to the beat; audio only, the MIDI out stays clean
     const auto sounding = transport.playing && ! (midiGate && hostIsPlaying && numHeldNotes == 0);
@@ -668,7 +698,7 @@ void RollsKillaProcessor::processBlockBypassed (juce::AudioBuffer<float>& buffer
     patternSlot.release();
     for (int i = 0; i < numEvents; ++i)
         if (events[(size_t) i].vel == 0)
-            midi.addEvent (juce::MidiMessage::noteOff (1, events[(size_t) i].note), events[(size_t) i].sampleOffset);
+            midi.addEvent (juce::MidiMessage::noteOff (events[(size_t) i].slot + 1, events[(size_t) i].note), events[(size_t) i].sampleOffset);
 
     if (! bypassFaded)
     {
@@ -677,12 +707,319 @@ void RollsKillaProcessor::processBlockBypassed (juce::AudioBuffer<float>& buffer
         sampler.allNotesOff();
         sampler.render (buffer, 0, numSamples);
         sampler.endBlock();
+        kitSampler.beginBlock();
+        kitSampler.allNotesOff();
+        kitSampler.render (buffer, 0, numSamples);
+        kitSampler.endBlock();
         smoke.reset();
         heldNotes.fill (false);
         numHeldNotes = 0;
         hostPlaying.store (false, std::memory_order_relaxed);
         bypassFaded = true;
     }
+}
+
+//==============================================================================
+// DRUM KIT
+void RollsKillaProcessor::writeKitToState()
+{
+    auto old = apvts.state.getChildWithName (DrumKit::kTreeType);
+    if (old.isValid())
+        apvts.state.removeChild (old, nullptr);
+    apvts.state.appendChild (kit.toValueTree(), nullptr);
+}
+
+void RollsKillaProcessor::syncKitFromState()
+{
+    const auto tree = apvts.state.getChildWithName (DrumKit::kTreeType);
+    if (tree.isValid())
+        kit.fromValueTree (tree);
+    else
+        writeKitToState();   // a project from before the kit: keep the defaults
+    refreshKitSounds();
+}
+
+namespace
+{
+    bool sameSound (const KitSlot& a, const KitSlot& b)
+    {
+        return a.seed == b.seed && a.mood == b.mood && a.file == b.file
+            && juce::approximatelyEqual (a.shape.tune, b.shape.tune) && juce::approximatelyEqual (a.shape.decay, b.shape.decay)
+            && juce::approximatelyEqual (a.shape.punch, b.shape.punch) && juce::approximatelyEqual (a.shape.drive, b.shape.drive)
+            && juce::approximatelyEqual (a.shape.tone, b.shape.tone) && juce::approximatelyEqual (a.shape.body, b.shape.body);
+    }
+}
+
+void RollsKillaProcessor::refreshKitSounds()
+{
+    // sounds are rendered at 44.1 kHz once; the samplers resample to the host rate
+    for (int t = 0; t < kNumDrumTypes; ++t)
+    {
+        const auto type = drumTypeFromIndex (t);
+        const auto& s = kit.slot (type);
+        kitSampler.setGain (type, s.volumeDb, s.muted);
+       #if ! ROLLSKILLA_MINI
+        if (type == DrumType::hat)
+            hatDrawerDb.store (s.muted ? -100.0f : s.volumeDb);
+       #endif
+        if (slotRendered[(size_t) t] && sameSound (renderedSlots[(size_t) t], s))
+            continue;
+        juce::String error;
+        auto snd = kit.renderSlot (type, kKitExportRate, error);
+        renderedSlots[(size_t) t] = s;
+        slotRendered[(size_t) t] = true;
+        if (type == DrumType::hat)
+        {
+            hatKitSound = snd;
+           #if ! ROLLSKILLA_MINI
+            // Rolls Killa: the hi-hat drawer is what the rolls play (the rolls sampler's custom slot)
+            auto hs = std::make_shared<HatSample>();
+            hs->name = snd->name;
+            hs->audio = snd->audio;
+            hs->sampleRate = snd->sampleRate;
+            hs->synthesized = ! snd->fromFile();
+            sampler.setCustomSample (hs);
+            if ((int) raw.hat->load() != HatSampler::kCustomSlot)
+                if (auto* p = apvts.getParameter (params::hat))
+                    p->setValueNotifyingHost (p->convertTo0to1 ((float) HatSampler::kCustomSlot));
+           #endif
+            continue;
+        }
+        kitSampler.setSound (type, snd);
+    }
+}
+
+void RollsKillaProcessor::mergeKit (PlaybackPattern& pb) const
+{
+    double len = pb.lengthBeats;
+    bool any = false;
+    for (int t = 0; t < kNumDrumTypes; ++t)
+    {
+        const auto& s = kit.slots[(size_t) t];
+        if (s.patternOn && ! s.muted && (DrumType) t != DrumType::hat)
+        {
+            len = juce::jmax (len, s.patternBars * 4.0);
+            any = true;
+        }
+    }
+    if (! any)
+        return;
+
+    // the shorter patterns repeat inside the longest one
+    const auto hatLen = juce::jmax (1.0, pb.lengthBeats);
+    const auto hatEvents = pb.events;
+    for (double offset = hatLen; offset < len - 1.0e-6; offset += hatLen)
+        for (auto e : hatEvents)
+        {
+            e.beat += offset;
+            pb.events.push_back (e);
+        }
+
+    for (int t = 0; t < kNumDrumTypes; ++t)
+    {
+        const auto type = drumTypeFromIndex (t);
+        const auto& s = kit.slot (type);
+        if (! s.patternOn || s.muted || type == DrumType::hat)
+            continue;
+        const auto snd = kitSampler.getSound (type);
+        const auto root = snd != nullptr ? snd->rootNote : 60;
+        const auto slotLen = s.patternBars * 4.0;
+        const auto hits = kit.pattern (type);
+        for (double offset = 0.0; offset < len - 1.0e-6; offset += slotLen)
+            for (const auto& h : hits)
+                pb.events.push_back ({ h.beat + offset, h.len, juce::jlimit (0, 127, root + h.semi),
+                                       juce::jlimit (1, 127, (int) std::lround (h.vel * 127.0f)), t + 1 });
+    }
+    pb.lengthBeats = len;
+    std::stable_sort (pb.events.begin(), pb.events.end(), [] (const PlaybackPattern::Event& a, const PlaybackPattern::Event& b) { return a.beat < b.beat; });
+}
+
+void RollsKillaProcessor::updateKitSlot (DrumType type, const std::function<void (KitSlot&)>& change, bool commit)
+{
+    change (kit.slot (type));
+    writeKitToState();
+    refreshKitSounds();
+    rebuildPattern (true);
+    if (commit)
+        commitUndoStep();
+    else
+        markStateChanged();
+}
+
+void RollsKillaProcessor::setKitName (const juce::String& name)
+{
+    kit.name = name.trim().isEmpty() ? juce::String ("ROLLS KILLA KIT") : name.trim().substring (0, 48);
+    writeKitToState();
+    commitUndoStep();
+}
+
+void RollsKillaProcessor::killSound (DrumType type)
+{
+    const auto mood = getMood();
+    updateKitSlot (type, [mood] (KitSlot& s)
+    {
+        s.seed = (juce::uint32) juce::Random::getSystemRandom().nextInt (1 << 30) + 1;
+        s.mood = mood;
+        s.file = {};
+    }, true);
+}
+
+void RollsKillaProcessor::killPattern (DrumType type)
+{
+    if (type == DrumType::hat)
+    {
+        kill();
+        return;
+    }
+    updateKitSlot (type, [] (KitSlot& s)
+    {
+        s.patternSeed = (juce::uint32) juce::Random::getSystemRandom().nextInt (1 << 30) + 1;
+        s.patternOn = true;
+        s.muted = false;
+    }, true);
+}
+
+void RollsKillaProcessor::killKit()
+{
+    auto& rng = juce::Random::getSystemRandom();
+    for (auto& s : kit.slots)
+    {
+        s.seed = (juce::uint32) rng.nextInt (1 << 30) + 1;
+        s.mood = getMood();
+        s.file = {};
+    }
+    writeKitToState();
+    refreshKitSounds();
+    rebuildPattern (true);
+    commitUndoStep();
+}
+
+void RollsKillaProcessor::killBeat()
+{
+    auto& rng = juce::Random::getSystemRandom();
+    bool anyOn = false;
+    for (int t = 0; t < kNumDrumTypes; ++t)
+        if (drumTypeFromIndex (t) != DrumType::hat && kit.slots[(size_t) t].patternOn)
+            anyOn = true;
+    for (int t = 0; t < kNumDrumTypes; ++t)
+    {
+        auto& s = kit.slots[(size_t) t];
+        const auto type = drumTypeFromIndex (t);
+        if (type == DrumType::hat)
+            continue;
+        // a first KILL BEAT starts a full trap beat: 808, kick, clap (+ the hi-hat rolls)
+        if (! anyOn && (type == DrumType::b808 || type == DrumType::kick || type == DrumType::clap))
+            s.patternOn = true;
+        if (s.patternOn)
+            s.patternSeed = (juce::uint32) rng.nextInt (1 << 30) + 1;
+    }
+    writeKitToState();
+    killEverything();   // new hi-hat roll + rebuild + one undo step (includes the kit)
+}
+
+juce::String RollsKillaProcessor::loadSlotFile (DrumType type, const juce::File& file)
+{
+    juce::String error;
+    if (loadDrumFile (type, file, {}, kKitExportRate, error) == nullptr)
+        return error;
+    updateKitSlot (type, [&file] (KitSlot& s) { s.file = file.getFullPathName(); }, true);
+    return {};
+}
+
+void RollsKillaProcessor::clearSlotFile (DrumType type)
+{
+    updateKitSlot (type, [] (KitSlot& s) { s.file = {}; }, true);
+}
+
+bool RollsKillaProcessor::keepSound (DrumType type)
+{
+    const auto snd = getSlotSound (type);
+    if (! kit.keep (type, snd != nullptr ? snd->name : juce::String (drumTypeName (type))))
+        return false;
+    writeKitToState();
+    commitUndoStep();
+    return true;
+}
+
+void RollsKillaProcessor::removeKept (int index)
+{
+    if (index < 0 || index >= (int) kit.kept.size())
+        return;
+    kit.kept.erase (kit.kept.begin() + index);
+    writeKitToState();
+    commitUndoStep();
+}
+
+void RollsKillaProcessor::auditionSlot (DrumType type) noexcept
+{
+    pendingAudition.store ((int) type + 1);
+}
+
+DrumSoundPtr RollsKillaProcessor::getSlotSound (DrumType type) const
+{
+    return type == DrumType::hat ? hatKitSound : kitSampler.getSound (type);
+}
+
+std::vector<KitMidi> RollsKillaProcessor::kitMidis()
+{
+    std::vector<KitMidi> out;
+    const auto bpm = getEffectiveBpm();
+    out.push_back ({ "Hi-Hat Rolls", createMidiFile (model.getPattern(), getMidiExportOptions()) });
+    for (int t = 0; t < kNumDrumTypes; ++t)
+    {
+        const auto type = drumTypeFromIndex (t);
+        const auto& s = kit.slot (type);
+        if (type == DrumType::hat || ! s.patternOn)
+            continue;
+        const auto snd = getSlotSound (type);
+        out.push_back ({ juce::String (drumTypeName (type)) + " Pattern",
+                         drumHitsToMidi (kit.pattern (type), snd != nullptr ? snd->rootNote : 60, bpm, drumTypeName (type)) });
+    }
+    return out;
+}
+
+juce::File RollsKillaProcessor::createSlotMidiFile (DrumType type)
+{
+    if (type == DrumType::hat)
+        return createDragMidiFile();
+    const auto snd = getSlotSound (type);
+    const auto mf = drumHitsToMidi (kit.pattern (type), snd != nullptr ? snd->rootNote : 60, getEffectiveBpm(), drumTypeName (type));
+    auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("Rolls Killa MIDI");
+    dir.createDirectory();
+    auto f = dir.getChildFile (safeFileName ("Rolls Killa - " + juce::String (drumTypeName (type)) + " " + juce::String (juce::roundToInt (getEffectiveBpm())) + " BPM") + ".mid");
+    f.deleteFile();
+    if (juce::FileOutputStream os (f); os.openedOk())
+        mf.writeTo (os, 1);
+    return f;
+}
+
+juce::File RollsKillaProcessor::createBeatMidiFile()
+{
+    // one type-1 file: tempo track + one track per playing drawer (FL makes a channel per track)
+    juce::MidiFile all;
+    all.setTicksPerQuarterNote (kTicksPerBeat);
+    for (const auto& m : kitMidis())
+        for (int i = 0; i < m.midi.getNumTracks(); ++i)
+            all.addTrack (*m.midi.getTrack (i));
+    auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("Rolls Killa MIDI");
+    dir.createDirectory();
+    auto f = dir.getChildFile ("Rolls Killa - Beat " + juce::String (juce::roundToInt (getEffectiveBpm())) + " BPM.mid");
+    f.deleteFile();
+    if (juce::FileOutputStream os (f); os.openedOk())
+        all.writeTo (os, 1);
+    return f;
+}
+
+KitExportResult RollsKillaProcessor::exportKitTo (const juce::File& parentDir)
+{
+    return exportKit (kit, parentDir, kitMidis());
+}
+
+KitExportResult RollsKillaProcessor::exportOneShotsTo (const juce::File& parentDir, DrumType type, int count)
+{
+    const auto& s = kit.slot (type);
+    const auto name = kit.name + " - " + juce::String (count) + " " + drumTypeFolder (type);
+    return exportOneShotKit (type, count, getMood(), s.shape, (juce::uint32) juce::Random::getSystemRandom().nextInt (1 << 30) + 1, name, parentDir);
 }
 
 //==============================================================================

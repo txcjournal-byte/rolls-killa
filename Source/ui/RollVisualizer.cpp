@@ -117,7 +117,10 @@ void RollVisualizer::paint (juce::Graphics& g)
     const auto len = pattern.lengthBeats();
     const auto bars = pattern.bars;
     const auto locks = processor.getLockedBars();
-    const auto playhead = processor.getPlayheadBeat();
+    // the whole beat can be longer than the roll (kit patterns): the roll repeats inside it
+    auto playhead = processor.getPlayheadBeat();
+    if (playhead >= 0.0 && len > 0.0)
+        playhead = std::fmod (playhead, len);
     const auto header = headerArea();
     const auto barsRect = compact ? juce::Rectangle<float>() : barsChoice.getBounds().toFloat().withTrimmedLeft (-40.0f);
 

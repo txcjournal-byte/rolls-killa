@@ -413,6 +413,58 @@ int main (int argc, char* argv[])
             expectTrue (hp.getKillHistoryPosition() == (int) hist.size() - 1, "history position follows the click");
         }
 
+        // ---- DRUM KIT: drawers play their patterns with the rolls, MIDI on their own channels ----
+        {
+            std::unique_ptr<juce::AudioProcessor> kb (createPluginFilter());
+            auto& kp = dynamic_cast<RollsKillaProcessor&> (*kb);
+            FakePlayHead kph;
+            kph.bpm = 140.0;
+            kph.playing = true;
+            kp.setPlayHead (&kph);
+            kp.setPlayConfigDetails (0, 2, sr, block);
+            kp.prepareToPlay (sr, block);
+            if (auto* pm = kp.getState().getParameter (rk::params::playMode))
+                pm->setValueNotifyingHost (pm->convertTo0to1 (1.0f));
+            kp.killBeat();   // first KILL BEAT: 808 + kick + clap + hi-hat rolls
+            const auto& kit = kp.getKit();
+            expectTrue (kit.slot (rk::DrumType::b808).patternOn && kit.slot (rk::DrumType::kick).patternOn && kit.slot (rk::DrumType::clap).patternOn,
+                        "KILL BEAT starts 808, kick and clap");
+            std::array<int, 17> onsPerChannel {};
+            juce::AudioBuffer<float> buf (2, block);
+            float peak = 0.0f;
+            for (int b = 0; b < (int) (8.0 * sr / block); ++b)
+            {
+                juce::MidiBuffer midi;
+                kph.ppq = b * block * kph.bpm / 60.0 / sr;
+                kp.processBlock (buf, midi);
+                peak = juce::jmax (peak, buf.getMagnitude (0, block));
+                for (const auto m : midi)
+                    if (m.getMessage().isNoteOn())
+                        ++onsPerChannel[(size_t) m.getMessage().getChannel()];
+            }
+            expectTrue (onsPerChannel[1] > 0 && onsPerChannel[2] > 0 && onsPerChannel[3] > 0 && onsPerChannel[5] > 0,
+                        "hats on ch 1, 808 on ch 2, kick on ch 3, clap on ch 5");
+            std::cout << "     beat peak " << juce::Decibels::gainToDecibels (peak) << " dBFS" << std::endl;
+            expectTrue (peak > 0.2f && peak < 1.12f, "the kit sounds and does not clip (peak < +1 dB)");
+            expectTrue (kp.getHitCount (rk::DrumType::kick) > 0, "kick pad flashes");
+
+            // undo brings the previous kit back, the state survives a save/load
+            const auto seedBefore = kit.slot (rk::DrumType::kick).seed;
+            kp.killSound (rk::DrumType::kick);
+            expectTrue (kp.getKit().slot (rk::DrumType::kick).seed != seedBefore, "KILL on a pad = new sound");
+            kp.undo();
+            expectTrue (kp.getKit().slot (rk::DrumType::kick).seed == seedBefore, "undo = the sound before");
+            juce::MemoryBlock mb;
+            kp.getStateInformation (mb);
+            std::unique_ptr<juce::AudioProcessor> kb2 (createPluginFilter());
+            auto& kp2 = dynamic_cast<RollsKillaProcessor&> (*kb2);
+            kp2.setStateInformation (mb.getData(), (int) mb.getSize());
+            expectTrue (kp2.getKit().slot (rk::DrumType::kick).seed == seedBefore && kp2.getKit().slot (rk::DrumType::clap).patternOn,
+                        "the kit is saved in the project");
+            expectTrue (kp2.createBeatMidiFile().existsAsFile(), "beat MIDI for drag & drop");
+            kp.setPlayHead (nullptr);
+        }
+
         // ---- open / close speed: the host must never wait on us ----
         {
             const auto t0 = juce::Time::getMillisecondCounterHiRes();

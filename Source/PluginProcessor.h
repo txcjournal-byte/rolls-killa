@@ -2,6 +2,8 @@
 
 #include "Parameters.h"
 #include "engine/HatSampler.h"
+#include "engine/KitExport.h"
+#include "engine/KitSampler.h"
 #include "engine/MidiExport.h"
 #include "engine/UndoHistory.h"
 #include "engine/LockFreeSlot.h"
@@ -125,6 +127,34 @@ public:
 
     static constexpr int kRootNote = rk::HatSampler::kRootNote;
 
+    // ---- DRUM KIT (Rolls Killa): eight drawers, each a sound + a pattern ----------------------
+    // Every change is one undo step and is saved in the project (the kit lives in the state as numbers).
+    const rk::DrumKit& getKit() const noexcept { return kit; }
+    /** Changes a drawer (knobs, pattern settings). commit = record an undo step now (false = after a pause). */
+    void updateKitSlot (rk::DrumType type, const std::function<void (rk::KitSlot&)>& change, bool commit);
+    void setKitName (const juce::String& name);
+    void killSound (rk::DrumType type);            // a brand new sound in the drawer (current mood)
+    void killPattern (rk::DrumType type);          // a new pattern (the hi-hat = a new roll), turns it on
+    void killKit();                                // new sounds in every drawer
+    void killBeat();                               // new patterns for every playing drawer + a new hi-hat roll
+    juce::String loadSlotFile (rk::DrumType type, const juce::File& file);
+    void clearSlotFile (rk::DrumType type);
+    bool keepSound (rk::DrumType type);            // into the kit list
+    void removeKept (int index);
+    void auditionSlot (rk::DrumType type) noexcept;
+    /** The drawer's current sound (the hi-hat: the rolls sampler's hat). */
+    rk::DrumSoundPtr getSlotSound (rk::DrumType type) const;
+    /** Counts the hits per drawer (UI flashes the pads). */
+    int getHitCount (rk::DrumType type) const noexcept { return hitCounters[(size_t) type].load (std::memory_order_relaxed); }
+    std::vector<rk::DrumHit> getSlotPattern (rk::DrumType type) const { return kit.pattern (type); }
+    /** Length of the whole beat in beats (the longest playing pattern). */
+    double getBeatLength() const noexcept { return beatLength.load(); }
+
+    juce::File createSlotMidiFile (rk::DrumType type);
+    juce::File createBeatMidiFile();               // all playing drawers, one track each
+    rk::KitExportResult exportKitTo (const juce::File& parentDir);
+    rk::KitExportResult exportOneShotsTo (const juce::File& parentDir, rk::DrumType type, int count);
+
 private:
     void parameterChanged (const juce::String& parameterID, float newValue) override;
     void timerCallback() override;
@@ -132,6 +162,11 @@ private:
     void setParam (const char* id, float plainValue);
     void markStateChanged();
     void applyRestoredState();
+    void syncKitFromState();
+    void writeKitToState();
+    void refreshKitSounds();
+    void mergeKit (rk::PlaybackPattern& pb) const;
+    std::vector<rk::KitMidi> kitMidis();
     rk::HatSamplerSettings readSamplerSettings() const noexcept;
 
     // Declaration order matters: the parameter layout needs the sampler's hat names.
@@ -142,6 +177,15 @@ private:
     rk::PatternPlayer player;
     rk::SmokeFx smoke;
     rk::LockFreeSlot<rk::PlaybackPattern> patternSlot;
+    rk::DrumKit kit;
+    rk::KitSampler kitSampler;
+    std::array<rk::KitSlot, rk::kNumDrumTypes> renderedSlots;
+    std::array<bool, rk::kNumDrumTypes> slotRendered {};
+    rk::DrumSoundPtr hatKitSound;
+    std::array<std::atomic<int>, rk::kNumDrumTypes> hitCounters {};
+    std::atomic<int> pendingAudition { 0 };
+    std::atomic<double> beatLength { 4.0 };
+    std::atomic<float> hatDrawerDb { 0.0f };   // the hi-hat drawer's volume on top of the rolls sampler (Rolls Killa)
 
     std::atomic<bool> patternDirty { true };
     std::atomic<bool> previewEnabled { false };

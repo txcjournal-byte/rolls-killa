@@ -77,6 +77,11 @@ set(ROLLSKILLA_ENGINE_SOURCES
     Source/engine/VariationEngine.cpp
     Source/engine/MidiExport.cpp
     Source/engine/SmokeFx.cpp
+    Source/engine/DrumSynth.cpp
+    Source/engine/DrumPatterns.cpp
+    Source/engine/DrumKit.cpp
+    Source/engine/KitSampler.cpp
+    Source/engine/KitExport.cpp
 )
 
 set(ROLLSKILLA_COMMON_DEFINITIONS
@@ -179,6 +184,9 @@ if(ROLLSKILLA_BUILD_TESTS)
         Tests/ShaperTests.cpp
         Tests/MidiExportTests.cpp
         Tests/SmokeFxTests.cpp
+        Tests/DrumSynthTests.cpp
+        Tests/DrumPatternTests.cpp
+        Tests/KitTests.cpp
         ${ROLLSKILLA_ENGINE_SOURCES}
     )
 

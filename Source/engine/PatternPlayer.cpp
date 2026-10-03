@@ -42,7 +42,7 @@ void PatternPlayer::push (std::array<PlayerEvent, kMaxEventsPerBlock>& out, int&
 int PatternPlayer::flushOffs (int sampleOffset, std::array<PlayerEvent, kMaxEventsPerBlock>& out, int count) noexcept
 {
     for (int i = 0; i < numPending; ++i)
-        push (out, count, { sampleOffset, pending[(size_t) i].note, 0 });
+        push (out, count, { sampleOffset, pending[(size_t) i].note, 0, pending[(size_t) i].slot });
     numPending = 0;
     return count;
 }
@@ -86,7 +86,7 @@ int PatternPlayer::process (const PlaybackPattern* pattern, const TransportState
     {
         if (pending[(size_t) i].ppq < end)
         {
-            push (out, count, { toOffset (pending[(size_t) i].ppq), pending[(size_t) i].note, 0 });
+            push (out, count, { toOffset (pending[(size_t) i].ppq), pending[(size_t) i].note, 0, pending[(size_t) i].slot });
             pending[(size_t) i] = pending[(size_t) --numPending];
         }
         else
@@ -114,22 +114,22 @@ int PatternPlayer::process (const PlaybackPattern* pattern, const TransportState
 
                 // Retrigger of a still-sounding note: close it first.
                 for (int i = 0; i < numPending; ++i)
-                    if (pending[(size_t) i].note == e.note)
+                    if (pending[(size_t) i].note == e.note && pending[(size_t) i].slot == e.slot)
                     {
-                        push (out, count, { offset, e.note, 0 });
+                        push (out, count, { offset, e.note, 0, e.slot });
                         pending[(size_t) i] = pending[(size_t) --numPending];
                         break;
                     }
 
-                push (out, count, { offset, e.note, e.vel });
+                push (out, count, { offset, e.note, e.vel, e.slot });
 
                 const auto off = on + e.len;
                 if (off < end)
-                    push (out, count, { toOffset (off), e.note, 0 });
+                    push (out, count, { toOffset (off), e.note, 0, e.slot });
                 else if (numPending < kMaxPendingOffs)
-                    pending[(size_t) numPending++] = { off, e.note };
+                    pending[(size_t) numPending++] = { off, e.note, e.slot };
                 else
-                    push (out, count, { numSamples - 1, e.note, 0 });
+                    push (out, count, { numSamples - 1, e.note, 0, e.slot });
             }
         }
 
