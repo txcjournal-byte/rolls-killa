@@ -2,6 +2,7 @@
 // checks the output is audible, finite and in range, and writes a demo WAV.
 #include "../Source/PluginProcessor.h"
 #include <iostream>
+#include "../Source/PluginEditor.h"
 
 static int failures = 0;
 static void check (bool ok, const juce::String& what)
@@ -129,6 +130,46 @@ int main (int argc, char** argv)
     HatGoblinProcessor proc2;
     proc2.setStateInformation (mb.getData(), (int) mb.getSize());
     check (proc2.apvts.getRawParameterValue ("hat")->load() == proc.apvts.getRawParameterValue ("hat")->load(), "state save / load");
+
+    // UI snapshots (run under Xvfb): HatGoblinTests --snapshot <dir>
+    if (argc > 2 && juce::String (argv[1]) == "--snapshot")
+    {
+        juce::File dir (argv[2]);
+        dir.createDirectory();
+        // something visible in the LED: hold 1/16 for a moment
+        render (proc, { { 65, 1000 } }, 30);
+        std::unique_ptr<juce::AudioProcessorEditor> ed (proc.createEditor());
+        ed->setSize (HatGoblinEditor::baseW, HatGoblinEditor::baseH);
+        auto snap = [&] (const juce::String& name)
+        {
+            auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
+            juce::PNGImageFormat png;
+            juce::FileOutputStream os (dir.getChildFile (name + ".png"));
+            os.setPosition (0); os.truncate();
+            png.writeImageToStream (img, os);
+        };
+        std::function<void (juce::Component&)> pump;
+        auto clickTab = [&] (const juce::String& text)
+        {
+            std::function<juce::TextButton* (juce::Component&)> find = [&] (juce::Component& c) -> juce::TextButton*
+            {
+                for (auto* ch : c.getChildren())
+                {
+                    if (auto* b = dynamic_cast<juce::TextButton*> (ch); b != nullptr && b->getButtonText() == text) return b;
+                    if (auto* f = find (*ch)) return f;
+                }
+                return nullptr;
+            };
+            if (auto* b = find (*ed)) { b->setToggleState (true, juce::dontSendNotification); if (b->onClick) b->onClick(); }
+        };
+        snap ("roll");
+        clickTab ("SHAPE"); snap ("shape");
+        clickTab ("FX");    snap ("fx");
+        clickTab ("KIT");   snap ("kit");
+        ed.reset();
+        std::cout << "  snapshots written to " << dir.getFullPathName() << std::endl;
+        return 0;
+    }
 
     // demo WAV: a little roll sequence
     if (argc > 1)

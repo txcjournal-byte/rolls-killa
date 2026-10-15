@@ -554,7 +554,7 @@ public:
         g.setColour (line);
         g.drawRect (presetLed, 1);
         auto* s = proc.currentSample();
-        ledText (g, s != nullptr ? s->name : "--", presetLed.toFloat().reduced (34, 0), 22.0f, red, juce::Justification::centred);
+        ledText (g, s != nullptr ? s->name : "--", presetLed.toFloat().reduced (32, 0), 21.0f, red, juce::Justification::centred);
 
         // sync
         const bool playing = proc.hostPlaying.load();
@@ -771,18 +771,18 @@ public:
     void resized() override
     {
         headerArea = { 0, 0, getWidth(), 54 };
-        int x = 280;
+        int x = 270;
         for (auto& t : tabs) { t.setBounds (x, 14, t.getButtonText().length() * 9 + 26, 26); x += t.getWidth() - 1; }
-        presetLed = { x + 16, 11, 250, 32 };
+        presetLed = { x + 12, 11, 200, 32 };
         prevHat.setBounds (presetLed.getX(), presetLed.getY(), 30, presetLed.getHeight());
         nextHat.setBounds (presetLed.getRight() - 30, presetLed.getY(), 30, presetLed.getHeight());
-        syncArea = { presetLed.getRight() + 12, 14, 80, 26 };
+        syncArea = { presetLed.getRight() + 10, 14, 76, 26 };
         int sx = syncArea.getRight() + 8;
-        for (auto& b : speedBtn) { b.setBounds (sx, 14, 38, 26); sx += 37; }
+        for (auto& b : speedBtn) { b.setBounds (sx, 14, 36, 26); sx += 35; }
         sx += 8;
-        monoBtn.setBounds (sx, 14, 52, 26); sx += 51;
-        latchBtn.setBounds (sx, 14, 58, 26); sx += 57;
-        chokeBtn.setBounds (sx, 14, 60, 26);
+        monoBtn.setBounds (sx, 14, 50, 26); sx += 49;
+        latchBtn.setBounds (sx, 14, 54, 26); sx += 53;
+        chokeBtn.setBounds (sx, 14, 56, 26);
 
         // footer: legend + keyboard
         auto foot = juce::Rectangle<int> (12, getHeight() - 122, getWidth() - 24, 116);
