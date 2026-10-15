@@ -131,6 +131,33 @@ int main (int argc, char** argv)
     proc2.setStateInformation (mb.getData(), (int) mb.getSize());
     check (proc2.apvts.getRawParameterValue ("hat")->load() == proc.apvts.getRawParameterValue ("hat")->load(), "state save / load");
 
+    // showcase audio: HatGoblinTests --showcase out.wav
+    if (argc > 2 && juce::String (argv[1]) == "--showcase")
+    {
+        auto setP = [&] (const char* id, float v) { if (auto* q = proc.apvts.getParameter (id)) q->setValueNotifyingHost (q->convertTo0to1 (v)); };
+        juce::AudioBuffer<float> cap (2, 0);
+        struct Seg { int hat; std::vector<std::pair<int,int>> notes; int blocks; float swing; int shape; float ramp; };
+        std::vector<Seg> segs {
+            { 2,  { { 65, 70 }, { 67, 70 }, { 65, 70 }, { 70, 70 } }, 74, 0.0f, 1, 0.0f },   // BASIC: 1/16, 1/32, 1/16, 1/64T
+            { 21, { { 66, 70 }, { 68, 70 }, { 66, 70 }, { 69, 70 } }, 74, 0.0f, 1, 4.0f },   // CRISP: triplets, pitch ramp
+            { 43, { { 53, 290 } }, 296, 0.15f, 3, 0.0f },                                  // DIRTY: SKIP pattern
+            { 65, { { 48, 290 } }, 296, 0.2f, 3, 0.0f },                                   // LOFI: FLICK 3
+            { 83, { { 56, 290 } }, 296, 0.0f, 1, 0.0f },                                   // EXTREME: RATCHET
+            { 101,{ { 57, 290 } }, 296, 0.0f, 2, -5.0f },                                  // WEIRD: GLITCH
+        };
+        for (auto& sg : segs)
+        {
+            setP ("hat", (float) sg.hat); setP ("swing", sg.swing); setP ("velShape", (float) sg.shape); setP ("pitchRamp", sg.ramp);
+            render (proc, sg.notes, sg.blocks, &cap, false);
+        }
+        juce::File out (argv[2]); out.deleteFile();
+        juce::WavAudioFormat wav;
+        std::unique_ptr<juce::AudioFormatWriter> w (wav.createWriterFor (new juce::FileOutputStream (out), 44100.0, 2, 16, {}, 0));
+        if (w) w->writeFromAudioSampleBuffer (cap, 0, cap.getNumSamples());
+        std::cout << "  showcase written" << std::endl;
+        return 0;
+    }
+
     // UI snapshots (run under Xvfb): HatGoblinTests --snapshot <dir>
     if (argc > 2 && juce::String (argv[1]) == "--snapshot")
     {
@@ -142,7 +169,7 @@ int main (int argc, char** argv)
         ed->setSize (HatGoblinEditor::baseW, HatGoblinEditor::baseH);
         auto snap = [&] (const juce::String& name)
         {
-            auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
+            auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 2.0f);
             juce::PNGImageFormat png;
             juce::FileOutputStream os (dir.getChildFile (name + ".png"));
             os.setPosition (0); os.truncate();
