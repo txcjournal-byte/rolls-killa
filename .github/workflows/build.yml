@@ -1,0 +1,141 @@
+name: build
+
+# Builds, tests and packages HAT GOBLIN by TrapWin:
+#   Windows: VST3 + Standalone  -> Inno Setup installer
+#   macOS:   VST3 + AU + Standalone (universal arm64 + x86_64) -> .pkg (signed + notarized when the secrets exist)
+# Every push publishes the newest build to the "test" release, always under the same links:
+#   https://github.com/txcjournal-byte/rolls-killa/releases/download/test/HAT-GOBLIN-Setup-Windows.exe
+#   https://github.com/txcjournal-byte/rolls-killa/releases/download/test/HAT-GOBLIN-VST3-Windows.zip
+#   https://github.com/txcjournal-byte/rolls-killa/releases/download/test/HAT-GOBLIN-Setup-Mac.pkg
+#   https://github.com/txcjournal-byte/rolls-killa/releases/download/test/HAT-GOBLIN-Plugins-Mac.zip
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Restore build cache
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: win-${{ hashFiles('CMakeLists.txt') }}-${{ github.sha }}
+          restore-keys: win-${{ hashFiles('CMakeLists.txt') }}-
+
+      - name: Configure
+        run: cmake -B build -A x64
+
+      - name: Build
+        run: cmake --build build --config Release --parallel --target HatGoblin_VST3 HatGoblin_Standalone HatGoblinTests
+
+      - name: Render tests
+        run: build\HatGoblinTests_artefacts\Release\HatGoblinTests.exe
+
+      - name: Installer
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+          $version = (Select-String -Path CMakeLists.txt -Pattern 'project\(HAT_GOBLIN VERSION ([0-9.]+)').Matches[0].Groups[1].Value
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" installer\win\hatgoblin.iss
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Publish test build (fixed links)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force out, out\stage | Out-Null
+          Copy-Item (Get-ChildItem build\installer\*.exe | Select-Object -First 1).FullName out\HAT-GOBLIN-Setup-Windows.exe
+          Copy-Item -LiteralPath "build\HatGoblin_artefacts\Release\VST3\HAT GOBLIN.vst3" -Destination out\stage -Recurse -Force
+          Get-ChildItem out\stage -Recurse -File -Include *.pdb,*.ilk,*.exp,*.lib | Remove-Item -Force
+          Compress-Archive -LiteralPath "out\stage\HAT GOBLIN.vst3" -DestinationPath out\HAT-GOBLIN-VST3-Windows.zip -Force
+          $notes = "HAT GOBLIN by TrapWin - latest test build`n`nCommit: ${{ github.sha }}`nBuilt: $(Get-Date -Format u)"
+          gh release view test *> $null
+          if ($LASTEXITCODE -ne 0) { gh release create test --prerelease --title "HAT GOBLIN - latest test build" --notes $notes --target ${{ github.sha }} }
+          if ($LASTEXITCODE -ne 0) { Start-Sleep -Seconds 20 }
+          gh release upload test out\HAT-GOBLIN-Setup-Windows.exe out\HAT-GOBLIN-VST3-Windows.zip --clobber
+
+      - name: Upload artifacts
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: HAT-GOBLIN-Windows
+          path: |
+            build/installer/*.exe
+
+  macos:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Configure (universal)
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 4 --target HatGoblin_VST3 HatGoblin_AU HatGoblin_Standalone HatGoblinTests
+
+      - name: Render tests
+        run: ./build/HatGoblinTests_artefacts/Release/HatGoblinTests
+
+      - name: auval
+        continue-on-error: true
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          cp -R "build/HatGoblin_artefacts/Release/AU/HAT GOBLIN.component" ~/Library/Audio/Plug-Ins/Components/
+          killall -9 AudioComponentRegistrar || true
+          sleep 5
+          auval -v aumu Hgob Trwn
+
+      - name: pluginval
+        continue-on-error: true
+        run: |
+          curl -sSL -o pluginval.zip https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_macOS.zip
+          unzip -q pluginval.zip
+          ./pluginval.app/Contents/MacOS/pluginval --strictness-level 5 --validate-in-process --validate "build/HatGoblin_artefacts/Release/VST3/HAT GOBLIN.vst3"
+
+      - name: Mac signing setup (when the secrets exist)
+        env:
+          MAC_CERT_APP_P12: ${{ secrets.MAC_CERT_APP_P12 }}
+          MAC_CERT_INSTALLER_P12: ${{ secrets.MAC_CERT_INSTALLER_P12 }}
+          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: installer/mac/setup_signing.sh
+
+      - name: Installer (pkg)
+        run: |
+          VERSION=$(sed -n 's/project(HAT_GOBLIN VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          installer/mac/build_pkg.sh "$VERSION"
+
+      - name: Publish test build (fixed links)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p out
+          cp build/installer/HAT-GOBLIN-*-macOS.pkg out/HAT-GOBLIN-Setup-Mac.pkg
+          mkdir -p out/zip && cp -R "build/pkgroot/Library/Audio/Plug-Ins/VST3/HAT GOBLIN.vst3" "build/pkgroot/Library/Audio/Plug-Ins/Components/HAT GOBLIN.component" out/zip/
+          (cd out/zip && ditto -c -k . ../HAT-GOBLIN-Plugins-Mac.zip)
+          if ! gh release view test > /dev/null 2>&1; then
+            gh release create test --prerelease --title "HAT GOBLIN - latest test build" --notes "HAT GOBLIN by TrapWin - latest test build" --target "$GITHUB_SHA" || sleep 20
+          fi
+          gh release upload test out/HAT-GOBLIN-Setup-Mac.pkg out/HAT-GOBLIN-Plugins-Mac.zip --clobber
+
+      - name: Upload artifacts
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: HAT-GOBLIN-macOS
+          path: build/installer/*.pkg
