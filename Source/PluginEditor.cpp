@@ -146,6 +146,15 @@ static void scanlines (juce::Graphics& g, juce::Rectangle<int> r)
         g.fillRect (r.getX(), y, r.getWidth(), 1);
 }
 
+// Never take the keyboard from the host: after a click on the plugin, FL Studio's
+// space bar, typing keyboard and shortcuts must keep working.
+static void neverTakeKeyboard (juce::Component& c)
+{
+    c.setWantsKeyboardFocus (false);
+    c.setMouseClickGrabsKeyboardFocus (false);
+    for (auto* ch : c.getChildren()) neverTakeKeyboard (*ch);
+}
+
 // ============================================================================ knob
 Knob::Knob (juce::AudioProcessorValueTreeState& s, const juce::String& id, const juce::String& l, std::function<juce::String (float)> fmt)
     : state (s), paramId (id), label (l), format (std::move (fmt))
@@ -906,6 +915,7 @@ public:
         for (auto& b : kitBtns) vis (*b, kit, this);
         for (auto* c : std::initializer_list<juce::Component*> { &audition, &loadWav2, &useFactory2 }) vis (*c, kit, this);
         help.toFront (false);
+        neverTakeKeyboard (*this);
         resized();
         repaint();
     }
@@ -1549,6 +1559,7 @@ HatGoblinEditor::HatGoblinEditor (HatGoblinProcessor& p)
     content = std::make_unique<GoblinContent> (*this);
     content->setBounds (0, 0, baseW, baseH);
     addAndMakeVisible (*content);
+    neverTakeKeyboard (*this);
 
     setResizable (true, true);
     setResizeLimits (baseW * 6 / 10, baseH * 6 / 10, baseW * 2, baseH * 2);
