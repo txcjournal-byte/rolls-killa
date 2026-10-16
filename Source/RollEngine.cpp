@@ -559,7 +559,7 @@ void RollEngine::process (juce::AudioBuffer<float>& out, const juce::MidiBuffer&
     if (preview && ! lastPreview) { grooveOrigin = engineBeat; pausedByMidi.store (false); }
     lastPreview = preview;
     if (t.playing) grooveOrigin = 0.0;                               // bar 1 of the DAW = start of the groove
-    grooveOn = p.groove && ! pausedByMidi.load() && (t.playing || preview);
+    grooveOn = preview || (p.withDaw && t.playing && ! pausedByMidi.load());
     if (grooveOn) grooveHitCount = realizeGroove (grooveHits.data(), maxGrooveHits, p);
     lastPlaying = t.playing;
     latchNow = p.latch != latchState;
@@ -578,9 +578,9 @@ void RollEngine::process (juce::AudioBuffer<float>& out, const juce::MidiBuffer&
         const auto msg = meta.getMessage();
         if (msg.isNoteOn()) lastIncomingNote.store (msg.getNoteNumber());
         if (msg.isNoteOn() && t.playing) pausedByMidi.store (true);   // notes from the DAW take over from the groove
-        if (msg.isNoteOn() && KeyMap::isHit (msg.getNoteNumber())) hit (msg.getFloatVelocity(), KeyMap::hitSemis (msg.getNoteNumber()), p);
-        else if (msg.isNoteOn())  noteOn (msg.getNoteNumber(), msg.getFloatVelocity(), engineBeat);
-        else if (msg.isNoteOff()) noteOff (msg.getNoteNumber());
+        // every note plays one hit, pitched like a sampler: C5 (FL) = 60 = original pitch.
+        // So the MIDI from DRAG MIDI plays the same on this plugin and on any sampler.
+        if (msg.isNoteOn()) hit (msg.getFloatVelocity(), (double) (msg.getNoteNumber() - 60), p);
         else if (msg.isAllNotesOff() || msg.isAllSoundOff()) reset();
     }
     renderSegment (out, pos, n - pos, p, t);

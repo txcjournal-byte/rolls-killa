@@ -154,6 +154,10 @@ static void neverTakeKeyboard (juce::Component& c)
     c.setMouseClickGrabsKeyboardFocus (false);
     for (auto* ch : c.getChildren()) neverTakeKeyboard (*ch);
 }
+static void childrenNeverTakeKeyboard (juce::Component& c)
+{
+    for (auto* ch : c.getChildren()) neverTakeKeyboard (*ch);
+}
 
 // ============================================================================ knob
 Knob::Knob (juce::AudioProcessorValueTreeState& s, const juce::String& id, const juce::String& l, std::function<juce::String (float)> fmt)
@@ -618,11 +622,11 @@ public:
         g.drawText ("How the goblin rolls", r.removeFromTop (48), juce::Justification::left);
         struct Step { const char* head; const char* body; };
         static const Step steps[] = {
-            { "1  PRESS PLAY", "Hit PLAY here, or just start your DAW. The hats play in time with your beat. No MIDI notes needed." },
+            { "1  PRESS PLAY", "Hit PLAY or the SPACE BAR (click on the goblin first). It plays at your DAW's tempo. When your DAW plays, the goblin is quiet, unless WITH DAW is on." },
             { "2  GENERATE", "Pick a style (or MIX), set COMPLEXITY, smash GENERATE. Don't like it? Smash it again. The arrows bring back the ones before. Or pick a PRESET." },
             { "3  TWEAK", "Click the grid: HAT = one hit, X2..X6 = a roll inside that slot. Click a beat's header for 1/8T or 1/16T triplets. FEEL knobs: swing, humanize, probability, pitch ramp." },
             { "4  YOUR SOUND", "120 factory hats: arrows at the top or the KIT page. Or drop your own WAV anywhere on the goblin." },
-            { "5  TAKE IT", "DRAG AUDIO: the loop as a WAV, straight into your playlist. DRAG MIDI: into a channel's piano roll. DRAG HAT: the sample itself. What you drag is exactly what you hear." },
+            { "5  TAKE IT", "DRAG AUDIO: the loop as a WAV, straight into your playlist. DRAG MIDI: into the piano roll of any hat channel (notes on C5). DRAG HAT: the sample itself. What you drag is exactly what you hear." },
         };
         for (auto& st : steps)
         {
@@ -634,7 +638,6 @@ public:
             g.drawFittedText (st.body, r.removeFromTop (46), juce::Justification::topLeft, 3);
             r.removeFromTop (6);
         }
-        smallLabel (g, "KEYS tab = old-school mode: hold keys to roll", r.removeFromTop (16), gray, juce::Justification::left, 8.5f);
     }
     void resized() override
     {
@@ -679,8 +682,8 @@ public:
                     [this] { return proc.writeMidi (proc.lastRollKey()); }, true),
           keysAudio ("DRAG AUDIO", [] { return "WAV OF THIS ROLL"; }, [this] { return proc.writeAudio (proc.lastRollKey()); }, false)
     {
-        const char* tabNames[] = { "GROOVE", "SHAPE", "FX", "KIT", "KEYS" };
-        for (int i = 0; i < 5; ++i)
+        const char* tabNames[] = { "GROOVE", "SHAPE", "FX", "KIT" };
+        for (int i = 0; i < 4; ++i)
         {
             tabs[i].setButtonText (tabNames[i]);
             tabs[i].setClickingTogglesState (true);
@@ -717,11 +720,11 @@ public:
         addAndMakeVisible (helpBtn);
 
         // --- GROOVE page
-        playBtn.onClick = [this]
-        {
-            if (proc.hostPlaying.load()) return;
-            proc.engine.previewPlaying.store (! proc.engine.previewPlaying.load());
-        };
+        playBtn.onClick = [this] { togglePlay(); };
+        withDawBtn.setButtonText ("WITH DAW");
+        withDawBtn.setClickingTogglesState (true);
+        withDawBtn.setTooltip ("Also play while your DAW plays (off = the goblin is quiet when the DAW plays)");
+        withDawAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc.apvts, "withDaw", withDawBtn);
         playBtn.getProperties().set ("accent", "red");
         playBtn.getProperties().set ("big", true);
         backBtn.setButtonText ("<"); fwdBtn.setButtonText (">");
@@ -767,9 +770,6 @@ public:
         {
             if (presetBox.getSelectedId() > 0) { proc.loadPreset (presetBox.getSelectedId() - 1); grid.shownBar = 0; grid.repaint(); }
         };
-        midiForBox.addItem ("MIDI: ANY SAMPLER (C5 ROOT)", 1);
-        midiForBox.addItem ("MIDI: HAT GOBLIN CHANNEL", 2);
-        midiForBox.onChange = [this] { ed.setParam ("midiTarget", (float) (midiForBox.getSelectedId() - 1)); };
         hatBox2.setJustificationType (juce::Justification::centredLeft);
         loadWavG.setButtonText ("LOAD YOUR HAT");
         loadWavG.onClick = [this] { ed.chooseUserFile(); };
@@ -823,7 +823,6 @@ public:
         }
         keyboard.activeNote = [this] { return proc.engine.displayNote.load(); };
         keyboard.flNames = [this] { return proc.flNoteNames(); };
-        namesBtn.onClick = [this] { ed.setParam ("noteNames", proc.flNoteNames() ? 1.0f : 0.0f); };
 
         // --- SHAPE page
         const char* pans[] = { "CENTER", "PING-PONG", "SWEEP" };
@@ -857,6 +856,23 @@ public:
         setPage (groovePage);
         refresh();
         if (! proc.helpSeen) { help.setVisible (true); }
+
+        // space bar = PLAY / STOP while you work in the plugin
+        setWantsKeyboardFocus (true);
+        setMouseClickGrabsKeyboardFocus (true);
+        addMouseListener (this, true);
+    }
+
+    void togglePlay()
+    {
+        if (proc.hostPlaying.load()) return;          // the DAW is playing: the goblin waits
+        proc.engine.previewPlaying.store (! proc.engine.previewPlaying.load());
+    }
+    void mouseDown (const juce::MouseEvent&) override { if (isShowing()) grabKeyboardFocus(); }
+    bool keyPressed (const juce::KeyPress& k) override
+    {
+        if (k == juce::KeyPress::spaceKey) { togglePlay(); return true; }
+        return false;
     }
 
     juce::String lengthText() const
@@ -895,8 +911,8 @@ public:
             c.setVisible (v);
         };
         const bool gr = p == groovePage, shape = p == shapePage, fx = p == fxPage, kit = p == kitPage, keys = p == keysPage;
-        for (auto* c : std::initializer_list<juce::Component*> { &playBtn, &backBtn, &fwdBtn, &grid, &generateBtn, &goblin, &varyBtn,
-                                                                &presetBox, &midiForBox, &kComplex, &dragAudio, &dragMidi, &dragHat,
+        for (auto* c : std::initializer_list<juce::Component*> { &playBtn, &withDawBtn, &backBtn, &fwdBtn, &grid, &generateBtn, &goblin, &varyBtn,
+                                                                &presetBox, &kComplex, &dragAudio, &dragMidi, &dragHat,
                                                                 &kSwingG, &kHumG, &kProbG, &kDepthG, &kPitchG, &kTuneG, &hatBox2, &loadWavG })
             vis (*c, gr, this);
         for (auto& b : lenBtn) vis (b, gr, this);
@@ -905,7 +921,7 @@ public:
         for (auto& b : rollShapeBtn) vis (b, gr, this);
         for (auto* c : std::initializer_list<juce::Component*> { &hatBox, &kTune, &kDecay, &kVol, &loadWav, &useFactory,
                                                                 &kSwing, &kHum, &kDepth, &kRnd, &kProb, &keysMidi, &keysAudio,
-                                                                &keyboard, &monoBtn, &latchBtn, &namesBtn })
+                                                                &keyboard, &monoBtn, &latchBtn })
             vis (*c, keys, this);
         for (auto& s : shapeBtn) vis (s, keys || shape, this);
         for (auto& pd : pads) vis (*pd, keys, this);
@@ -915,7 +931,7 @@ public:
         for (auto& b : kitBtns) vis (*b, kit, this);
         for (auto* c : std::initializer_list<juce::Component*> { &audition, &loadWav2, &useFactory2 }) vis (*c, kit, this);
         help.toFront (false);
-        neverTakeKeyboard (*this);
+        childrenNeverTakeKeyboard (*this);
         resized();
         repaint();
     }
@@ -965,14 +981,14 @@ public:
             grid.shownBar = juce::jlimit (0, nb - 1, now / 4);
         for (int i = 0; i < 4; ++i) barBtn[i].setToggleState (grid.shownBar == i, juce::dontSendNotification);
         const bool running = proc.hostPlaying.load() || proc.engine.previewPlaying.load();
-        playBtn.setButtonText (proc.hostPlaying.load() ? "IN SYNC" : (running ? "STOP" : "PLAY"));
-        playBtn.setToggleState (running, juce::dontSendNotification);
+        const bool preview = proc.engine.previewPlaying.load();
+        juce::ignoreUnused (running);
+        playBtn.setButtonText (preview ? "STOP" : "PLAY");
+        playBtn.setToggleState (preview || proc.engine.grooveNowBeat.load() >= 0, juce::dontSendNotification);
         backBtn.setEnabled (proc.canGoBack());
         fwdBtn.setEnabled (proc.canGoForward());
-        midiForBox.setSelectedId (proc.midiRoot() == 60 ? 1 : 2, juce::dontSendNotification);
         presetBox.setSelectedId (proc.presetIndex >= 0 ? proc.presetIndex + 1 : 0, juce::dontSendNotification);
         if (proc.presetIndex < 0) presetBox.setText ("PRESETS", juce::dontSendNotification);
-        namesBtn.setButtonText (proc.flNoteNames() ? "KEY NAMES: FL STUDIO" : "KEY NAMES: ABLETON / LOGIC");
 
         auto* s = proc.currentSample();
         if (s != shownSample) { shownSample = s; buildPeaks(); }
@@ -992,6 +1008,7 @@ public:
             repaint (statusArea);
             repaint (nameArea);
         }
+        if (page == shapePage) repaint (shapeLanes);
         repaint (headerArea);
     }
 
@@ -1056,12 +1073,16 @@ public:
     {
         const auto p = proc.currentParams();
         c = red;
-        if (! p.groove) { c = muted; return "GROOVE OFF - KEYS MODE"; }
-        if (proc.engine.pausedByMidi.load()) { c = bone; return "NOTES FROM YOUR DAW - THEY PLAY NOW"; }
-        if (proc.hostPlaying.load()) return "PLAYING WITH YOUR DAW";
-        if (proc.engine.previewPlaying.load()) return "PREVIEW - " + juce::String (juce::roundToInt (proc.currentBpm.load())) + " BPM";
+        const auto bpm = juce::String (juce::roundToInt (proc.currentBpm.load())) + " BPM";
+        if (proc.engine.previewPlaying.load()) return "PLAYING - " + bpm;
+        if (proc.hostPlaying.load())
+        {
+            if (! p.withDaw) { c = muted; return "DAW PLAYING - GOBLIN WAITS"; }
+            if (proc.engine.pausedByMidi.load()) { c = bone; return "NOTES FROM YOUR DAW PLAY"; }
+            return "PLAYING WITH YOUR DAW";
+        }
         c = redDim;
-        return "PRESS PLAY OR START YOUR DAW";
+        return "PRESS PLAY OR SPACE";
     }
 
     void paintGroove (juce::Graphics& g)
@@ -1097,6 +1118,9 @@ public:
         smallLabel (g, "Style", styleLabel, muted, juce::Justification::centredLeft, 8.5f);
         panelBox (g, outPanel);
         smallLabel (g, "Take it to your DAW", outPanel.reduced (12, 8).removeFromTop (12));
+        g.setColour (gray);
+        g.setFont (Fonts::label (8.5f));
+        g.drawFittedText ("MIDI notes sit on C5 (FL): they play any sampler, or this plugin, at the right pitch.", midiNote, juce::Justification::topLeft, 2);
     }
 
     void paintKeys (juce::Graphics& g)
@@ -1289,7 +1313,7 @@ public:
         help.setBounds (getLocalBounds());
         headerArea = { 0, 0, getWidth(), 54 };
         int x = 280;
-        for (auto& t : tabs) { t.setBounds (x, 14, t.getButtonText().length() * 9 + 26, 26); x += t.getWidth() - 1; }
+        for (int i = 0; i < 4; ++i) { auto& t = tabs[i]; t.setBounds (x, 14, t.getButtonText().length() * 9 + 26, 26); x += t.getWidth() - 1; }
         presetLed = { x + 10, 11, 168, 32 };
         prevHat.setBounds (presetLed.getX(), presetLed.getY(), 30, presetLed.getHeight());
         nextHat.setBounds (presetLed.getRight() - 30, presetLed.getY(), 30, presetLed.getHeight());
@@ -1340,11 +1364,13 @@ public:
             r2.removeFromLeft (6);
             dragHat.setBounds (r2);
             op.removeFromTop (8);
-            midiForBox.setBounds (op.removeFromTop (26));
+            midiNote = op.removeFromTop (30);
 
             // left: transport strip
             auto strip = b.removeFromTop (54);
             playBtn.setBounds (strip.removeFromLeft (104));
+            strip.removeFromLeft (8);
+            withDawBtn.setBounds (strip.removeFromLeft (86).withSizeKeepingCentre (86, 30));
             strip.removeFromLeft (8);
             auto lens = strip.removeFromRight (3 * 58);
             for (int i = 0; i < 3; ++i) lenBtn[i].setBounds (lens.getX() + i * 58, lens.getY() + 12, 56, 30);
@@ -1516,11 +1542,11 @@ private:
     juce::uint32 followUntil = 0;
     bool goblinWasLaughing = false;
     juce::TextButton tabs[5], prevHat, nextHat, speedBtn[3], monoBtn, latchBtn, chokeBtn, helpBtn;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> monoAtt, latchAtt, chokeAtt;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> monoAtt, latchAtt, chokeAtt, withDawAtt;
     GoblinKeyboard keyboard;
     juce::ComboBox hatBox, hatBox2, presetBox, midiForBox;
     juce::TextButton loadWav, useFactory, shapeBtn[4], panBtn[3], audition, loadWav2, useFactory2, namesBtn;
-    juce::TextButton playBtn, backBtn, fwdBtn, lenBtn[3], barBtn[4], generateBtn, varyBtn, loadWavG, rollShapeBtn[4];
+    juce::TextButton playBtn, withDawBtn, backBtn, fwdBtn, lenBtn[3], barBtn[4], generateBtn, varyBtn, loadWavG, rollShapeBtn[4];
     std::vector<std::unique_ptr<juce::TextButton>> styleBtns;
     Knob kTune, kDecay, kVol, kSwing, kHum, kDepth, kRnd, kProb, kPitch, kPanW, kDepth2, kSwing2,
          kDrive, kCrush, kHpf, kLpf, kVerb, kOut,
@@ -1536,7 +1562,7 @@ private:
 
     juce::Rectangle<int> headerArea, presetLed, syncArea, legendArea, soundPanel, waveArea, latchHint, ledArea, knobPanel,
                          shapeLabel, patternPanel, shapeLanes, shapeSide, panLabel, fxFoot, kitSide,
-                         statusArea, nameArea, gridHint, feelPanel, rollShapeLabel, hatLabel, genPanel, styleLabel, outPanel;
+                         statusArea, nameArea, gridHint, midiNote, feelPanel, rollShapeLabel, hatLabel, genPanel, styleLabel, outPanel;
     std::array<juce::Rectangle<int>, 6> fxBoxes, kitCols;
 };
 
@@ -1560,6 +1586,7 @@ HatGoblinEditor::HatGoblinEditor (HatGoblinProcessor& p)
     content->setBounds (0, 0, baseW, baseH);
     addAndMakeVisible (*content);
     neverTakeKeyboard (*this);
+    content->setWantsKeyboardFocus (true);      // only for the space bar (PLAY / STOP); all other keys go to the host
 
     setResizable (true, true);
     setResizeLimits (baseW * 6 / 10, baseH * 6 / 10, baseW * 2, baseH * 2);

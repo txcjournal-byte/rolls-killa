@@ -46,7 +46,7 @@ APVTS::ParameterLayout HatGoblinProcessor::createLayout()
     f ("lpf", "Low Pass", 2000.0f, 20000.0f, 20000.0f, 8000.0f, "Hz");
     f ("reverb", "Reverb", 0.0f, 1.0f, 0.06f);
     f ("out", "Output", -24.0f, 6.0f, -3.0f, -1, "dB");
-    b ("groove", "Groove Plays", true);
+    b ("withDaw", "Play With DAW", false);
     c ("bars", "Length", { "1 Bar", "2 Bars", "4 Bars" }, 0);
     {
         juce::StringArray styles;
@@ -54,8 +54,7 @@ APVTS::ParameterLayout HatGoblinProcessor::createLayout()
         c ("style", "Style", styles, 0);
     }
     f ("complexity", "Complexity", 0.0f, 1.0f, 0.5f);
-    c ("midiTarget", "Drag MIDI For", { "Any sampler (root C5 in FL)", "Hat Goblin channel" }, 0);
-    c ("noteNames", "Note Names", { "FL Studio (C5 = 60)", "Ableton / Logic (C3 = 60)" }, 0);
+
     return { p.begin(), p.end() };
 }
 
@@ -106,7 +105,7 @@ RollParams HatGoblinProcessor::currentParams() const
     const int sp = (int) v ("speed");
     p.speed = sp == 0 ? 0.5 : (sp == 2 ? 2.0 : 1.0);
     p.mono = v ("mono") > 0.5f; p.latch = v ("latch") > 0.5f; p.choke = v ("choke") > 0.5f;
-    p.groove = v ("groove") > 0.5f;
+    p.withDaw = v ("withDaw") > 0.5f;
     const int bars = (int) v ("bars");
     p.bars = bars == 2 ? 4 : (bars == 1 ? 2 : 1);
     return p;
@@ -327,8 +326,8 @@ static juce::File exportFile (const juce::String& name)
 juce::File HatGoblinProcessor::writeMidi (int key)
 {
     auto file = exportFile (exportName (key) + ".mid");
-    auto midi = key < 0 ? engine.renderGrooveMidi (currentParams(), midiRoot())
-                        : engine.renderMidi (key, currentParams(), midiRoot() == 60 ? 60 : KeyMap::hitRoot);
+    auto midi = key < 0 ? engine.renderGrooveMidi (currentParams(), 60)
+                        : engine.renderMidi (key, currentParams(), 60);
     if (auto out = file.createOutputStream())
     {
         midi.writeTo (*out);
@@ -374,8 +373,7 @@ juce::File HatGoblinProcessor::writeAudio (int key)
     juce::MemoryBlock state;
     getStateInformation (state);
     tmp.setStateInformation (state.getData(), (int) state.getSize());
-    if (key >= 0)
-        if (auto* g = tmp.apvts.getParameter ("groove")) g->setValueNotifyingHost (0.0f);
+    if (auto* g = tmp.apvts.getParameter ("withDaw")) g->setValueNotifyingHost (key < 0 ? 1.0f : 0.0f);
 
     const double rate = getSampleRate() > 0 ? getSampleRate() : 44100.0;
     const double bpm = currentBpm.load();

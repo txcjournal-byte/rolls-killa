@@ -48,7 +48,7 @@ public:
     RollParams currentParams() const;
     int lastRollKey() const noexcept { return lastKey.load(); }
     void setLastRollKey (int k) noexcept { lastKey.store (k); }
-    bool flNoteNames() const { return apvts.getRawParameterValue ("noteNames")->load() < 0.5f; }
+    bool flNoteNames() const { return true; }
 
     // --- GROOVE (main page) ---
     void generate();                                    // new groove from STYLE + COMPLEXITY + LENGTH
@@ -70,7 +70,6 @@ public:
     juce::File writeAudio (int key = -1);               // exactly as it sounds now, FX included (24-bit WAV)
     juce::File writeHatWav();                           // the current hat sample
     juce::String exportName (int key) const;
-    int midiRoot() const { return apvts.getRawParameterValue ("midiTarget")->load() < 0.5f ? 60 : KeyMap::hitRoot; }
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
 

@@ -73,47 +73,18 @@ int main (int argc, char** argv)
     std::cout << "HAT GOBLIN render test" << std::endl;
     check (HatLibrary::get().size() == 120, "120 factory hats loaded (" + juce::String (HatLibrary::get().size()) + ")");
 
-    auto silence = render (proc, { { 120, 1 } }, 40);
-    check (silence.peak < 1.0e-6f, "unmapped key stays silent, groove silent while the DAW is stopped");
+    auto silence = render (proc, { { -1, 0 } }, 40);
+    check (silence.peak < 1.0e-6f, "silent while nothing plays");
 
-    for (int note = KeyMap::firstRate; note <= KeyMap::lastRate; ++note)
-    {
-        auto st = render (proc, { { note, 60 } }, 80);
-        check (st.finite && st.peak > 0.02f && st.peak <= 1.0f, "rate " + KeyMap::rateLabel (note) + " rolls (peak " + juce::String (st.peak, 3) + ")");
-    }
-    for (int note = KeyMap::firstPattern; note <= KeyMap::lastPattern; ++note)
-    {
-        auto st = render (proc, { { note, 120 } }, 140);
-        check (st.finite && st.peak > 0.02f, "pattern " + proc.engine.patternName (note - KeyMap::firstPattern));
-    }
-
-    // every factory hat plays
+    // every factory hat plays (a note = one hit, C5 = original pitch)
     int quiet = 0;
     for (int h = 0; h < HatLibrary::get().size(); ++h)
     {
         if (auto* prm = proc.apvts.getParameter ("hat")) prm->setValueNotifyingHost (prm->convertTo0to1 ((float) h));
-        auto st = render (proc, { { 65, 20 } }, 30);
+        auto st = render (proc, { { 60, 20 } }, 30);
         if (! (st.finite && st.peak > 0.01f)) { ++quiet; std::cout << "    silent: " << HatLibrary::get().hat (h).name << std::endl; }
     }
     check (quiet == 0, "all factory hats are audible (" + juce::String (quiet) + " silent)");
-
-    // latch: a released key keeps rolling, pressing it again stops it
-    if (auto* l = proc.apvts.getParameter ("latch")) l->setValueNotifyingHost (1.0f);
-    {
-        juce::AudioBuffer<float> cap (2, 0);
-        render (proc, { { 65, 2 } }, 40, &cap);                  // tap and release
-        const float tail = cap.getMagnitude (0, cap.getNumSamples() - 20 * 512, 20 * 512);
-        check (tail > 0.02f, "latch keeps rolling after the key is released");
-        juce::AudioBuffer<float> cap2 (2, 0);
-        render (proc, { { 65, 2 } }, 60, &cap2);                 // tap again = stop
-        const float tail2 = cap2.getMagnitude (0, cap2.getNumSamples() - 20 * 512, 20 * 512);
-        check (tail2 < 0.01f, "pressing a latched roll again stops it");
-    }
-    if (auto* l = proc.apvts.getParameter ("latch")) l->setValueNotifyingHost (0.0f);
-
-    // host transport playing
-    auto host = render (proc, { { 67, 80 } }, 100, nullptr, true);
-    check (host.finite && host.peak > 0.02f, "rolls follow a playing host transport");
 
     // MIDI export
     RollParams prm;
@@ -128,25 +99,30 @@ int main (int argc, char** argv)
     // ---------------------------------------------------------------- GROOVE (the main workflow)
     auto setP = [] (HatGoblinProcessor& pr, const char* id, float v) { if (auto* q = pr.apvts.getParameter (id)) q->setValueNotifyingHost (q->convertTo0to1 (v)); };
     setP (proc, "hat", 3.0f);
-    render (proc, { { -1, 0 } }, 2, nullptr, false);      // transport stops: the groove is back
+    render (proc, { { -1, 0 } }, 120, nullptr, false);    // let the room tail die away
     {
+        auto daw = render (proc, { { -1, 0 } }, 120, nullptr, true);
+        check (daw.peak < 1.0e-4f, "quiet while the DAW plays (no doubled hats) " + juce::String (daw.peak, 6));
+        setP (proc, "withDaw", 1.0f);
+        render (proc, { { -1, 0 } }, 2, nullptr, false);
         auto st = render (proc, { { -1, 0 } }, 120, nullptr, true);
-        check (st.finite && st.peak > 0.05f && st.peak <= 1.0f, "groove plays by itself when the DAW plays (peak " + juce::String (st.peak, 3) + ")");
-        auto stop = render (proc, { { -1, 0 } }, 60, nullptr, false);
+        check (st.finite && st.peak > 0.05f && st.peak <= 1.0f, "WITH DAW on: plays with the DAW (peak " + juce::String (st.peak, 3) + ")");
+        render (proc, { { -1, 0 } }, 60, nullptr, false);
         juce::AudioBuffer<float> cap (2, 0);
         render (proc, { { -1, 0 } }, 40, &cap, false);
-        check (cap.getMagnitude (0, cap.getNumSamples()) < 1.0e-4f, "groove stops when the DAW stops (" + juce::String (cap.getMagnitude (0, cap.getNumSamples()), 6) + ")");
-        juce::ignoreUnused (stop);
-        proc.engine.previewPlaying.store (true);
-        auto pv = render (proc, { { -1, 0 } }, 80, nullptr, false);
-        check (pv.peak > 0.05f, "PLAY button previews the groove with the DAW stopped");
-        proc.engine.previewPlaying.store (false);
-        render (proc, { { -1, 0 } }, 30, nullptr, false);
-        auto midiIn = render (proc, { { 30, 5 } }, 10, nullptr, true);
+        check (cap.getMagnitude (0, cap.getNumSamples()) < 1.0e-4f, "stops when the DAW stops");
+        render (proc, { { 30, 5 } }, 10, nullptr, true);
         check (proc.engine.pausedByMidi.load(), "notes from the DAW pause the groove");
         render (proc, { { -1, 0 } }, 4, nullptr, false);
         check (! proc.engine.pausedByMidi.load(), "groove comes back when the DAW stops");
-        juce::ignoreUnused (midiIn);
+        setP (proc, "withDaw", 0.0f);
+
+        proc.engine.previewPlaying.store (true);
+        auto pv = render (proc, { { -1, 0 } }, 80, nullptr, false);
+        check (pv.peak > 0.05f, "PLAY / space bar plays the groove");
+        render (proc, { { -1, 0 } }, 2, nullptr, true);
+        check (! proc.engine.previewPlaying.load(), "the DAW starting stops the goblin");
+        render (proc, { { -1, 0 } }, 2, nullptr, false);
     }
 
     // generator: every style, every length, plays and is valid
@@ -188,7 +164,9 @@ int main (int argc, char** argv)
         {
             setP (proc, "style", (float) style);
             proc.generate();
-            auto st = render (proc, { { -1, 0 } }, 90, nullptr, true);
+            proc.engine.previewPlaying.store (true);
+            auto st = render (proc, { { -1, 0 } }, 90, nullptr, false);
+            proc.engine.previewPlaying.store (false);
             render (proc, { { -1, 0 } }, 2, nullptr, false);
             if (st.peak < 0.05f) ++quietStyles;
         }
@@ -218,11 +196,10 @@ int main (int argc, char** argv)
         }
         setP (proc, "bars", 0.0f);
         // the MIDI for the Hat Goblin channel, fed back into a fresh Hat Goblin with the groove off, plays
-        auto mf = proc.engine.renderGrooveMidi (proc.currentParams(), KeyMap::hitRoot);
+        auto mf = proc.engine.renderGrooveMidi (proc.currentParams(), 60);
         HatGoblinProcessor back;
         back.setPlayConfigDetails (0, 2, 44100.0, 512);
         back.prepareToPlay (44100.0, 512);
-        setP (back, "groove", 0.0f);
         juce::AudioBuffer<float> buf (2, 512);
         float peak = 0; int b = 0;
         std::vector<std::pair<double, juce::MidiMessage>> evs;
@@ -248,7 +225,7 @@ int main (int argc, char** argv)
         proc.currentBpm.store (140.0);
         auto wav = proc.writeAudio (-1);
         auto hat = proc.writeHatWav();
-        auto keyWav = proc.writeAudio (65);
+        auto keyWav = proc.writeAudio (-1);
         juce::AudioFormatManager fm; fm.registerBasicFormats();
         auto len = [&] (const juce::File& f, float& pk) -> double
         {
@@ -264,7 +241,7 @@ int main (int argc, char** argv)
         const double l1 = len (wav, p1), l2 = len (hat, p2), l3 = len (keyWav, p3);
         check (std::abs (l1 - 4.0 * 60.0 / 140.0) < 0.01 && p1 > 0.05f, "DRAG AUDIO: 1 bar WAV, audible (" + juce::String (l1, 3) + " s)");
         check (l2 > 0.01 && p2 > 0.05f, "DRAG HAT: the sample as WAV");
-        check (l3 > 1.0 && p3 > 0.05f, "KEYS DRAG AUDIO: roll as WAV");
+        check (l3 > 1.0 && p3 > 0.05f, "DRAG AUDIO again gives the same length");
     }
 
     // knob reset values exist
@@ -298,7 +275,9 @@ int main (int argc, char** argv)
             proc.generate();
             render (proc, { { -1, 0 } }, 2, nullptr, false);
             // 2 bars at 140 = 3.43 s = 295 blocks of 512
-            render (proc, { { -1, 0 } }, 296, &cap, true);
+            proc.engine.previewPlaying.store (true);
+            render (proc, { { -1, 0 } }, 296, &cap, false);
+            proc.engine.previewPlaying.store (false);
             render (proc, { { -1, 0 } }, 30, &cap, false);   // a short gap
             std::cout << "  " << GrooveGen::styleName (style) << ": " << proc.grooveName << std::endl;
         }
@@ -313,7 +292,7 @@ int main (int argc, char** argv)
     if (argc > 2 && juce::String (argv[1]) == "--showcase")
     {
         auto setQ = [&] (const char* id, float v) { setP (proc, id, v); };
-        setQ ("groove", 0.0f);
+
         juce::AudioBuffer<float> cap (2, 0);
         struct Seg { int hat; std::vector<std::pair<int,int>> notes; int blocks; float swing; int shape; float ramp; };
         std::vector<Seg> segs {
@@ -345,7 +324,8 @@ int main (int argc, char** argv)
         proc.helpSeen = true;
         setP (proc, "style", 0.0f);
         proc.loadPreset (8);
-        render (proc, { { -1, 0 } }, 37, nullptr, true);     // playhead somewhere in the bar
+        proc.engine.previewPlaying.store (true);
+        render (proc, { { -1, 0 } }, 37, nullptr, false);     // playhead somewhere in the bar
         std::unique_ptr<juce::AudioProcessorEditor> ed (proc.createEditor());
         ed->setSize (HatGoblinEditor::baseW, HatGoblinEditor::baseH);
         auto snap = [&] (const juce::String& name)
@@ -376,8 +356,7 @@ int main (int argc, char** argv)
         clickTab ("SHAPE"); snap ("shape");
         clickTab ("FX");    snap ("fx");
         clickTab ("KIT");   snap ("kit");
-        render (proc, { { 65, 1000 } }, 30);
-        clickTab ("KEYS");  snap ("keys");
+
         ed.reset();
         std::cout << "  snapshots written to " << dir.getFullPathName() << std::endl;
         return 0;

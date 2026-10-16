@@ -48,7 +48,7 @@ struct RollParams
     int velShape = 1, panMode = 0;      // velShape 0 flat 1 up 2 down 3 accent; panMode 0 center 1 ping-pong 2 sweep
     double speed = 1.0;                 // 0.5 / 1 / 2 (multiplies roll speed)
     bool mono = true, latch = false, choke = true;
-    bool groove = true;                 // the groove plays with the DAW transport / PLAY button
+    bool withDaw = false;               // the groove also plays while the DAW plays (off: only PLAY / space bar)
     int bars = 1;                       // groove length 1, 2 or 4 bars
 };
 
@@ -124,7 +124,7 @@ public:
     int realizeGroove (GrooveHit* out, int maxHits, const RollParams& p) const;           // returns the count
     juce::MidiFile renderGrooveMidi (const RollParams& p, int rootNote) const;            // rootNote = pitch 0
 
-    std::atomic<bool> previewPlaying { false };      // PLAY button (when the DAW is stopped)
+    std::atomic<bool> previewPlaying { false };      // PLAY button / space bar in the plugin (stops when the DAW starts)
     std::atomic<int>  grooveNowBeat { -1 }, grooveNowSlot { -1 };   // under the playhead, for the UI
     std::atomic<bool> pausedByMidi { false };        // notes are coming in from the DAW: they play instead of the groove
 
