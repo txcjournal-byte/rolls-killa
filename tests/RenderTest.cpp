@@ -195,6 +195,24 @@ int main (int argc, char** argv)
             check (ons == n && n > 0 && last < RollEngine::grooveLength (p), "DRAG MIDI = the groove you hear, " + juce::String (p.bars) + " bar(s): " + juce::String (ons) + " notes");
         }
         setP (proc, "bars", 0.0f);
+        // speed 2x: the export is still a whole bar (the loop plays twice), MIDI and WAV alike
+        setP (proc, "speed", 2.0f);
+        {
+            const auto p = proc.currentParams();
+            std::vector<GrooveHit> hits (RollEngine::maxGrooveHits);
+            const int n = proc.engine.realizeGroove (hits.data(), RollEngine::maxGrooveHits, p);
+            auto mf = proc.engine.renderGrooveMidi (p, 60);
+            int ons = 0; double last = 0;
+            for (auto* ev : *mf.getTrack (0)) if (ev->message.isNoteOn()) { ++ons; last = ev->message.getTimeStamp() / 960.0; }
+            check (ons == 2 * n && last > 2.0 && last < 4.0, "2x: DRAG MIDI fills the whole bar (" + juce::String (ons) + " notes, last at beat " + juce::String (last, 2) + ")");
+            proc.currentBpm.store (140.0);
+            auto wav = proc.writeAudio (-1);
+            juce::AudioFormatManager fm; fm.registerBasicFormats();
+            std::unique_ptr<juce::AudioFormatReader> r (fm.createReaderFor (wav));
+            const double secs = r != nullptr ? r->lengthInSamples / r->sampleRate : 0.0;
+            check (std::abs (secs - 4.0 * 60.0 / 140.0) < 0.01, "2x: DRAG AUDIO is a whole bar (" + juce::String (secs, 3) + " s)");
+        }
+        setP (proc, "speed", 1.0f);
         // the MIDI for the Hat Goblin channel, fed back into a fresh Hat Goblin with the groove off, plays
         auto mf = proc.engine.renderGrooveMidi (proc.currentParams(), 60);
         HatGoblinProcessor back;

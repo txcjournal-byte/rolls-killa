@@ -240,17 +240,28 @@ int RollEngine::realizeGroove (GrooveHit* out, int maxOut, const RollParams& p) 
 juce::MidiFile RollEngine::renderGrooveMidi (const RollParams& p, int rootNote) const
 {
     constexpr int tpq = 960;
-    std::vector<GrooveHit> hits ((size_t) maxGrooveHits);
-    const int n = realizeGroove (hits.data(), maxGrooveHits, p);
-    const double len = grooveLength (p);
+    std::vector<GrooveHit> one ((size_t) maxGrooveHits);
+    const int n = realizeGroove (one.data(), maxGrooveHits, p);
+    const double loop = grooveLength (p), total = exportLength (p);
+
+    // repeat the loop until the export is whole bars long
+    std::vector<GrooveHit> hits;
+    for (double start = 0.0; start < total - 1.0e-9; start += loop)
+        for (int i = 0; i < n; ++i)
+        {
+            auto h = one[(size_t) i];
+            h.beat += start;
+            if (h.beat < total - 1.0e-9) hits.push_back (h);
+        }
+
     juce::MidiMessageSequence seq;
-    for (int i = 0; i < n; ++i)
+    for (size_t i = 0; i < hits.size(); ++i)
     {
-        const double beat = hits[(size_t) i].beat;
-        const double next = i + 1 < n ? hits[(size_t) i + 1].beat : len;
+        const double beat = hits[i].beat;
+        const double next = i + 1 < hits.size() ? hits[i + 1].beat : total;
         const double dur = juce::jlimit (1.0 / 128.0, 0.25, (next - beat) * 0.85);
-        const int note = juce::jlimit (0, 127, rootNote + (int) std::round (hits[(size_t) i].semis));
-        const int vel = juce::jlimit (1, 127, (int) std::round (127.0f * hits[(size_t) i].vel));
+        const int note = juce::jlimit (0, 127, rootNote + (int) std::round (hits[i].semis));
+        const int vel = juce::jlimit (1, 127, (int) std::round (127.0f * hits[i].vel));
         seq.addEvent (juce::MidiMessage::noteOn (1, note, (juce::uint8) vel), beat * tpq);
         seq.addEvent (juce::MidiMessage::noteOff (1, note), (beat + dur) * tpq);
     }

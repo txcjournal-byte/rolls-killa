@@ -121,6 +121,8 @@ public:
     GrooveGen::Groove getGroove() const noexcept;
     std::atomic<juce::uint32> grooveSeed { 12345 };  // decides humanize / probability / velocity random
     static double grooveLength (const RollParams& p) { return p.bars * 4.0 / p.speed; }   // in beats
+    // exports are always whole bars: at 2x the loop is repeated to fill the bar(s)
+    static double exportLength (const RollParams& p) { return std::ceil (grooveLength (p) / 4.0 - 1.0e-9) * 4.0; }
     int realizeGroove (GrooveHit* out, int maxHits, const RollParams& p) const;           // returns the count
     juce::MidiFile renderGrooveMidi (const RollParams& p, int rootNote) const;            // rootNote = pitch 0
 

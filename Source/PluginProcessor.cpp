@@ -386,7 +386,7 @@ juce::File HatGoblinProcessor::writeAudio (int key)
 
     const auto p = currentParams();
     double beats = 4.0;
-    if (key < 0) beats = RollEngine::grooveLength (p);
+    if (key < 0) beats = RollEngine::exportLength (p);
     else if (KeyMap::isPattern (key) && p.speed < 0.75) beats = 8.0;
     const int total = (int) std::round (beats * 60.0 / bpm * rate);
     juce::AudioBuffer<float> outAudio (2, total), buf (2, block);
