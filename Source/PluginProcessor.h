@@ -47,6 +47,30 @@ public:
     const HatSample* currentSample() const;            // what plays right now
     RollParams currentParams() const;
     int lastRollKey() const noexcept { return lastKey.load(); }
+    void setLastRollKey (int k) noexcept { lastKey.store (k); }
+    bool flNoteNames() const { return apvts.getRawParameterValue ("noteNames")->load() < 0.5f; }
+
+    // --- GROOVE (main page) ---
+    void generate();                                    // new groove from STYLE + COMPLEXITY + LENGTH
+    void loadPreset (int index);
+    bool canGoBack() const    { return historyPos > 0; }
+    bool canGoForward() const { return historyPos + 1 < (int) history.size(); }
+    void goBack();
+    void goForward();
+    void vary();                                        // same grid, new humanize/probability dice
+    void clearGroove();
+    juce::String grooveName;                            // "TRIPLET 03" / "GEN 12 - STUTTER" / "EDITED"
+    int presetIndex = -1;
+    void grooveEdited();                                // call after editing the grid (keeps undo working)
+    bool helpSeen = false;
+
+    // exports for drag and drop (message thread). Files go to the temp folder.
+    // key < 0 = the groove, otherwise a KEYS roll
+    juce::File writeMidi (int key = -1);
+    juce::File writeAudio (int key = -1);               // exactly as it sounds now, FX included (24-bit WAV)
+    juce::File writeHatWav();                           // the current hat sample
+    juce::String exportName (int key) const;
+    int midiRoot() const { return apvts.getRawParameterValue ("midiTarget")->load() < 0.5f ? 60 : KeyMap::hitRoot; }
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
 
@@ -57,6 +81,12 @@ private:
     std::atomic<const HatSample*> userSample { nullptr };
     juce::String userPath;
     std::atomic<int> lastKey { 65 };
+    struct Snapshot { GrooveGen::Groove groove; juce::uint32 seed; juce::String name; int preset; };
+    std::vector<Snapshot> history;
+    int historyPos = -1;
+    void pushHistory();
+    void restore (const Snapshot&);
+    int generatedCount = 0;
 
     juce::dsp::StateVariableTPTFilter<float> hpf, lpf;
     juce::Reverb reverb;

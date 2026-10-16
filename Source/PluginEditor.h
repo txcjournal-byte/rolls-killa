@@ -34,16 +34,32 @@ namespace HG
     };
 }
 
-// A labelled knob bound to one parameter.
+// A labelled knob bound to one parameter. Double-click resets it; right-click opens a menu (reset, host items).
 class Knob : public juce::Component
 {
 public:
     Knob (juce::AudioProcessorValueTreeState&, const juce::String& paramId, const juce::String& label, std::function<juce::String (float)> fmt);
     void resized() override;
     void paint (juce::Graphics&) override;
-    juce::Slider slider;
+
+    struct KnobSlider : public juce::Slider
+    {
+        std::function<void()> onMenu;
+        void mouseDown (const juce::MouseEvent& e) override
+        {
+            if (e.mods.isPopupMenu()) { if (onMenu) onMenu(); return; }
+            juce::Slider::mouseDown (e);
+        }
+        void mouseDrag (const juce::MouseEvent& e) override { if (! e.mods.isPopupMenu()) juce::Slider::mouseDrag (e); }
+        void mouseUp (const juce::MouseEvent& e) override   { if (! e.mods.isPopupMenu()) juce::Slider::mouseUp (e); }
+    };
+    KnobSlider slider;
+    void resetToDefault();
+    void showMenu();
+
 private:
-    juce::String label;
+    juce::AudioProcessorValueTreeState& state;
+    juce::String paramId, label;
     std::function<juce::String (float)> format;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> att;
 };
@@ -80,6 +96,7 @@ private:
     std::unique_ptr<juce::Component> content;   // laid out at 1100 x 680, scaled to the window
     bool dragHover = false;
     std::unique_ptr<juce::FileChooser> chooser;
+    juce::TooltipWindow tooltips { this, 500 };
 
     friend class GoblinContent;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HatGoblinEditor)
